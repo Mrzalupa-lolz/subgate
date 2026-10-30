@@ -16,7 +16,7 @@ import (
 type Injection struct {
 	ID       string `json:"id,omitempty"`
 	Name     string `json:"name,omitempty"`
-	RuleType string `json:"rule_type"` // append, prepend, patch, remove
+	RuleType string `json:"rule_type"` // append, prepend, patch, remove, xray-profile
 	Format   string `json:"format,omitempty"`
 	Content  string `json:"content"`
 	Path     string `json:"path,omitempty"` // JSON pointer for patch/remove
@@ -40,6 +40,10 @@ func ApplyInjections(raw []byte, rules []Injection) ([]byte, error) {
 	}
 	out := append([]byte(nil), raw...)
 	for _, rule := range rules {
+		// Full profiles have their own context-aware stage after routing.
+		if rule.RuleType == "xray-profile" {
+			continue
+		}
 		if !rule.Enabled {
 			continue
 		}
@@ -241,7 +245,11 @@ func mutateEndpointList(root *any, content any, operation string) error {
 		if !ok {
 			return fmt.Errorf("subscription root is not an object or array")
 		}
-		return mutateList(&list, content, operation)
+		if err := mutateList(&list, content, operation); err != nil {
+			return err
+		}
+		*root = list
+		return nil
 	}
 	for _, key := range []string{"outbounds", "proxies"} {
 		if list, ok := obj[key].([]any); ok {

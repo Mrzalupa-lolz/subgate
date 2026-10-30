@@ -293,6 +293,7 @@ func (s *Server) routes() {
 		r.Post("/backups", s.createBackup)
 		r.Get("/backups/{name}", s.downloadBackup)
 		r.Get("/injections", s.listInjections)
+		r.Get("/injections/{id}", s.getInjection)
 		r.Put("/injections/{id}", s.putInjection)
 		r.Delete("/injections/{id}", s.deleteInjection)
 		r.Get("/quotas", s.listQuotas)

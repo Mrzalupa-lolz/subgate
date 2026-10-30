@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"bytes"
 	"io"
 	"log/slog"
 	"net/http"
@@ -9,6 +10,42 @@ import (
 	"testing"
 	"time"
 )
+
+func TestChangedBodyHeadersAndRawCache(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set("Subscription-Userinfo", "upload=1; download=2; total=100")
+		_, _ = io.WriteString(w, "original")
+	}))
+	defer upstream.Close()
+	g := NewGateway(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	g.Configure(upstream.URL, nil)
+	g.Transform = func(r *http.Request, data []byte, headers http.Header) ([]byte, string, error) {
+		headers.Set("Content-Type", "application/json")
+		for _, key := range []string{"Content-Length", "Content-Encoding", "Etag", "Content-Md5", "Digest", "Content-Digest", "Repr-Digest"} {
+			headers.Set(key, "obsolete")
+		}
+		return []byte(`["changed"]`), "profile", nil
+	}
+	for i := 0; i < 2; i++ {
+		out := requestGateway(g, "synthetic", "v2ray-json", "", "")
+		if out.Body.String() != `["changed"]` || out.Header().Get("Subscription-Userinfo") == "" || out.Header().Get("Content-Type") != "application/json" {
+			t.Fatal("body or metadata incorrect")
+		}
+		for _, key := range []string{"Content-Length", "Content-Encoding", "Etag", "Content-Md5", "Digest", "Content-Digest", "Repr-Digest"} {
+			if out.Header().Get(key) != "" {
+				t.Fatal("obsolete header retained", key)
+			}
+		}
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	for _, entry := range g.cache {
+		if !bytes.Equal(entry.Data, []byte("original")) || entry.Headers.Get("Content-Type") != "text/plain" {
+			t.Fatal("source cache changed")
+		}
+	}
+}
 
 func TestTransformPanicAndDeadlineFailOpen(t *testing.T) {
 	for _, mode := range []string{"panic", "deadline"} {

@@ -15,6 +15,7 @@
   };
 
   const paths = {
+    injections: '<path d="M12 5v14M5 12h14"/>',
     overview: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
     live: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
     nodes: '<rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01M7 17.5h.01M16 6.5h2M16 17.5h2"/>',
@@ -41,6 +42,7 @@
     error: '<path d="m12 3 10 18H2L12 3ZM12 9v4M12 17h.01"/>',
   };
   const pages = {
+    injections: ['Инъекции', 'Общие дополнительные профили для подписок Xray JSON.'],
     overview: ['Обзор', 'Вся инфраструктура в одном месте. Состояние флота, шлюза и телеметрии.'],
     live: ['Live-трафик', 'Текущая скорость по пользователям и нодам. Только свежие измерения агентов.'],
     nodes: ['Ноды', 'Состояние и протоколы нод, синхронизированных с Remnawave.'],
@@ -58,6 +60,7 @@
     settings: ['Настройки', 'Фактическая конфигурация запущенного Core и состояние компонентов.'],
   };
   const schemas = {
+    injections: { help: 'Старые правила сохраняют прежний режим. Полный профиль добавляется после маршрутизации во все совместимые подписки /v2ray-json.', sample: {} },
     tiers: {
       sample: { name: 'Europe', strategy: 'leastLoad', min_healthy: 1, node_ids: [], fallback_tier_id: '', enabled: true },
       help: 'name — обязательное имя. strategy: random, roundRobin, leastPing или leastLoad. node_ids — UUID нод; min_healthy — минимальное число онлайн-нод; fallback_tier_id — ID резервной группы без циклов; enabled включает группу. leastLoad использует число пользователей. leastPing выбирает только успешную TCP/TLS пробу не старше 10 минут; если проб нет, используется резерв или исходная подписка. Политика выбирает ноду из группы и фильтрует распознанные адреса подписки. Неизвестные форматы и адреса сохраняются.',
@@ -220,7 +223,7 @@
   function renderShell() {
     const groups = [
       ['МОНИТОРИНГ', ['overview', 'live', 'nodes', 'users', 'agents']],
-      ['КОНФИГУРАЦИЯ', ['tiers', 'policies', 'pins', 'geo-rules']],
+      ['КОНФИГУРАЦИЯ', ['tiers', 'policies', 'pins', 'geo-rules', 'injections']],
       ['ОПЕРАЦИИ', ['activity', 'ipintel', 'alerts', 'backups', 'audit', 'settings']],
     ];
     app.innerHTML = `<a class="skip-link" href="#main-content">Перейти к содержимому</a><aside class="sidebar" id="sidebar" aria-label="Главное меню"><a class="brand" href="#/overview"><span class="logo-mark">S</span>SubGate<small>CORE</small></a><div class="workspace"><span class="workspace-avatar">${icon('nodes')}</span><span><strong>Operations console</strong><small>Контроль инфраструктуры</small></span></div><nav class="nav">${groups.map(([label, routes]) => `<div class="nav-label">${label}</div>${routes.filter(route => route !== 'activity' || canWrite()).map(route => `<a href="#/${route}" data-route="${route}">${icon(route)}${pages[route][0]}</a>`).join('')}`).join('')}</nav><div class="sidebar-foot"><span class="status-dot" id="connection-dot"></span><span id="connection-label">Core подключён</span><small class="sidebar-version">SubGate · <span id="sidebar-version">—</span></small></div></aside><div class="shell"><div class="topbar"><div class="crumb"><button class="menu-button" type="button" data-action="menu" aria-label="Открыть меню" aria-controls="sidebar" aria-expanded="false">${icon('menu')}</button><span class="root-crumb">Workspace</span><span id="breadcrumb"></span></div><div class="top-right"><span class="clock" id="clock"></span><span class="avatar" title="Владелец">${esc(state.user.Username.slice(0, 2).toUpperCase())}</span><span>${esc(state.user.Username)}</span><button type="button" class="ghost" data-action="logout" aria-label="Выйти из аккаунта" title="Выйти">${icon('logout')}</button></div></div><main class="content" id="main-content" tabindex="-1"></main></div>`;
@@ -353,7 +356,7 @@
     const selection = focusID && typeof focused.selectionStart === 'number' ? [focused.selectionStart, focused.selectionEnd] : null;
     if (state.chartCleanup) state.chartCleanup();
     state.chartCleanup = null;
-    const functions = { overview: overviewPage, live: livePage, nodes: nodesPage, users: usersPage, agents: agentsPage, activity: activityPage, ipintel: ipintelPage, backups: backupsPage, audit: auditPage, settings: settingsPage };
+    const functions = { injections: injectionsPage, overview: overviewPage, live: livePage, nodes: nodesPage, users: usersPage, agents: agentsPage, activity: activityPage, ipintel: ipintelPage, backups: backupsPage, audit: auditPage, settings: settingsPage };
     const body = override || (functions[state.route] ? functions[state.route]() : configPage());
     const demo = state.status?.demo ? '<div class="demo-banner">' + icon('error') + '<strong>DEMO</strong><span>Демонстрационные ноды и пользователи. Синтетический трафик не генерируется; измерения появятся после подключения агента.</span></div>' : '';
     main.innerHTML = (override ? pageHead() : '') + demo + body + `<footer class="footer"><span>SubGate · ${esc(state.status?.version || 'Core')} · Владелец</span><span id="updated-at">${state.updated ? `Обновлено ${date(state.updated, true)}` : ''}</span></footer>`;
@@ -480,6 +483,33 @@
       return [`<strong>${esc(node?.name || item.node_id)}</strong><small class="mono">${esc(item.node_id)}</small>`, badge(item.status === 'revoked' ? 'revoked' : item.online ? item.status : 'offline'), esc(item.version || '—'), esc(date(item.last_heartbeat)), `${count(item.memory_mb)} МиБ`, `<div class="table-actions">${actionButton('agent-diagnostics', 'Диагностика', `data-id="${esc(item.node_id)}"`)}${canWrite() && item.status !== 'revoked' ? actionButton('revoke-agent', 'Отозвать', `data-id="${esc(item.node_id)}"`, 'danger') : ''}</div>`];
     });
     return pageHead(canWrite() ? `<button type="button" class="primary" data-action="enrollment">${icon('plus')}Подключить агент</button>` : '') + `<div class="notice">Агент отправляет скорость из Xray StatsService и события из access.log. Онлайн означает heartbeat за последние 90 секунд. Ошибки источников видны в диагностике.</div>` + toolbar('Поиск по ноде, версии или ошибке') + panel('Подключённые коллекторы', table(['Нода', 'Состояние', 'Версия', 'Heartbeat', 'Память Go', 'Действия'], rows, { title: 'Агенты ещё не подключены', detail: nodes.length ? 'Нажмите «Подключить агент», создайте одноразовый токен и выполните команду на ноде.' : 'Сначала синхронизируйте ноды с Remnawave, затем создайте токен для выбранной ноды.', icon: 'agents' }), `<small>${count(list.filter(item => item.online && item.status !== 'revoked').length)} онлайн</small>`);
+  }
+  function injectionsPage() {
+    const list = state.data.list?.data || [];
+    const q = String(filters().q || '').toLowerCase();
+    const rows = list.filter(item => `${item.id} ${item.name || ''}`.toLowerCase().includes(q)).map(item => [
+      `<strong>${esc(item.name || item.id)}</strong><small>${esc(item.id)}</small>`,
+      esc(item.rule_type === 'xray-profile' ? 'Полный Xray-профиль' : `${item.rule_type} · ${item.format || 'авто'}`),
+      badge(item.enabled ? 'active' : 'disabled'),
+      `<div class="table-actions">${actionButton('edit-config', 'Открыть', `data-kind="injections" data-id="${esc(item.id)}"`)}${canWrite() ? actionButton('toggle-injection', item.enabled ? 'Отключить' : 'Включить', `data-id="${esc(item.id)}"`) + actionButton('delete-config', 'Удалить', `data-kind="injections" data-id="${esc(item.id)}"`, 'danger') : ''}</div>`,
+    ]);
+    return pageHead(canWrite() ? '<button type="button" class="primary" data-action="new-config" data-kind="injections">Добавить профиль</button>' : '') + '<div class="notice">Добавляется отдельным профилем в подписку Xray JSON. Для URI/base64 и других форматов не применяется. Используйте ссылку /sub/{shortUuid}/v2ray-json. Правило общее; закрепления и политики не нужны.</div>' + toolbar('Поиск по имени или ID') + panel('Инъекции', table(['Название', 'Режим', 'Состояние', 'Действия'], rows));
+  }
+  async function editProfile(existing) {
+    const id = existing?.id || `profile-${crypto.randomUUID()}`;
+    const value = existing || { name: '', content: '', enabled: true };
+    openDialog('Полный Xray-профиль', `<label>Название правила<input name="name" required maxlength="256" value="${esc(value.name)}" ${canWrite() ? '' : 'readonly'}></label><label class="editor-label">Полный JSON профиля<textarea name="content" class="profile-editor" spellcheck="false" required ${canWrite() ? '' : 'readonly'}>${esc(value.content)}</textarea></label><p class="help-line">Добавляется отдельным профилем в подписку Xray JSON. Для URI/base64 и других форматов не применяется.</p><label class="check-control"><input type="checkbox" name="enabled" ${value.enabled ? 'checked' : ''} ${canWrite() ? '' : 'disabled'}>Включено</label>`, canWrite() ? 'Сохранить' : null, async form => {
+      const content = String(form.get('content') || '');
+      let parsed;
+      try { parsed = JSON.parse(content); } catch (_) { throw new Error('JSON содержит ошибку синтаксиса. Вставьте один полный объект профиля.'); }
+      if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object' || !Array.isArray(parsed.outbounds) || !parsed.outbounds.length || parsed.outbounds.some(out => !out || typeof out.protocol !== 'string' || !out.protocol || 'type' in out)) throw new Error('Ожидается один Xray-профиль с непустым outbounds и полем protocol у каждого выхода.');
+      if (new TextEncoder().encode(content).length > 256 * 1024) throw new Error('Размер профиля превышает 256 КиБ.');
+      const revision = state.dialogRevision;
+      // Send the original text: parsing above validates syntax only, preserving large numbers.
+      await request(`/injections/${encodeURIComponent(id)}`, { method: 'PUT', body: { name: String(form.get('name')), content, enabled: form.has('enabled'), rule_type: 'xray-profile', format: 'xray-json' } });
+      if (revision === state.dialogRevision) closeDialog();
+      toast('Профиль сохранён'); await loadPage();
+    });
   }
   function configPage() {
     const kind = state.route;
@@ -732,12 +762,13 @@
     return Object.fromEntries(results);
   }
   async function editConfig(kind, id) {
-    const existing = id ? objectByID(kind, id) : null;
+    const existing = id ? (kind === 'injections' ? await request(`/injections/${encodeURIComponent(id)}`) : objectByID(kind, id)) : null;
+    if (kind === 'injections' && (!existing || existing.rule_type === 'xray-profile')) { await editProfile(existing); return; }
     if (id && !existing) { toast('Запись больше недоступна. Обновите страницу.', true); return; }
     const schema = schemas[kind];
     const value = existing || { ...schema.sample };
     if (kind === 'alerts' && !existing) value.created_at = new Date().toISOString();
-    const structured = kind !== 'alerts';
+    const structured = kind !== 'alerts' && kind !== 'injections';
     let refs = {};
     if (structured) {
       openDialog('Загрузка вариантов', '<div class="loading" role="status">Получаем ноды, пользователей и группы…</div>', null);
@@ -754,6 +785,7 @@
       const objectID = String(form.get('id') || '').trim();
       if (!objectID || objectID.length > 128 || /[/\\?#]/.test(objectID)) throw new Error('Укажите ID до 128 символов без /, \\, ? и #.');
       const payload = state.configEditor?.mode === 'form' ? readConfigFields() : readConfigJSON();
+      if (kind === 'injections') delete payload.id;
       await request(`/${kind}/${encodeURIComponent(objectID)}`, { method: 'PUT', body: payload });
       if (dialogRevision === state.dialogRevision) closeDialog();
       toast('Конфигурация сохранена'); await loadPage();
@@ -857,6 +889,12 @@
       return;
     }
     if (action === 'new-config' || action === 'edit-config') { await editConfig(kind, id); return; }
+    if (action === 'toggle-injection') {
+      const rule = await request(`/injections/${encodeURIComponent(id)}`);
+      const { id: ruleID, ...payload } = rule;
+      await request(`/injections/${encodeURIComponent(ruleID)}`, { method: 'PUT', body: { ...payload, enabled: !rule.enabled } });
+      toast(rule.enabled ? 'Правило отключено' : 'Правило включено'); await loadPage(); return;
+    }
     if (action === 'config-mode') { setConfigMode(button.dataset.mode); return; }
     if (action === 'delete-config') { confirmAction('Удалить запись', `Удалить ${id} из реестра ${pages[kind][0]}?`, async () => { await request(`/${kind}/${encodeURIComponent(id)}`, { method: 'DELETE' }); toast('Запись удалена'); await loadPage(); }, 'Удалить'); return; }
     if (action === 'enrollment') { enrollmentDialog(); return; }

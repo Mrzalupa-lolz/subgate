@@ -20,7 +20,14 @@ Enforcement только при refresh, это не data-plane cut-off.
 Append/prepend/patch/remove, uri/json/yaml detection, JSON Pointer path, max content256KiB, validation/CRUD+atomic audit есть.
 TestApplyInjectionsURIAppendPrependRemove/Base64AndDisabled/JSONPointerAndEndpointPatch/PreservesUnknownAndEnforcesLimits,
 TestInjectionAuditFailureRollsBackMutation PASS.
-Runtime применяет правила только после selected policy/pin node; passthrough без selection не получает injections.
+Старые append/prepend/patch/remove применяются только после selected policy/pin node.
+Новый явный `xray-profile` глобально добавляет полный независимый Xray-конфиг после routing/health,
+включая passthrough без пользователя/selection и tier-unavailable; quota-exhausted сохранён без добавления.
+Требуются clientType=v2ray-json и распознанная структура Xray; неподходящие тела сохраняются.
+UI «Инъекции» предоставляет исходный JSON-редактор, CRUD/enable/disable, сессию/CSRF; список скрывает content.
+RawMessage сохраняет числа/типы/порядок массивов, хранилище — исходный текст. Проверки: TestFullXrayProfilePreservesNestedValues,
+TestGlobalProfileStageAcrossRoutingBranches, TestProfileAPIAndGatewayLifecycle, TestProfileAPIValidationAndRuleLimit.
+Инструкция и доказательства upstream: [README](../../README.md#полный-xray-профиль-для-happincy).
 Нет full group/user/policy/format scopes, status gating blocked/expired/over-limit, client-core compat matrix,
 RFC6902/Merge Patch полного контракта, sandbox templates, version/dry-run diff/rollback.
 Поддержать WG/AWG/VLESS variants raw/ws/httpupgrade/grpc/h2/xhttp/mKCP/QUIC/REALITY/Vision, opaque future entries.
@@ -44,4 +51,4 @@ client/subpage template library отсутствуют; не путать upstre
 Encrypted channel rotating path/key derived from sub URL/fixed-size ciphertext optional own-client-only; отсутствует, B05.
 Decoy/masking page и Telegram support widget из Part B также отсутствуют; Core login screen не доказывает decoy.
 Любая mutation должна иметь exact shape validation, audit final outcome и adversarial fixtures.
-Функции шире CRUD оцениваются PARTIAL до behavioural workflow и test evidence, строки inventory — [FEATURE_STATUS](../FEATURE_STATUS.md).
+Функции шире CRUD оцениваются PARTIAL до behavioural workflow и test evidence, историческая сверка inventory — [архив FEATURE_STATUS](../_archive/triage-2026-10-30/docs/FEATURE_STATUS.md).

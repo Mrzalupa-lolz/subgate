@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
@@ -474,6 +475,11 @@ func (g *Gateway) serve(w http.ResponseWriter, r *http.Request, e CacheEntry, st
 	if g.Transform != nil && r.Method != http.MethodHead {
 		result := g.transform(r, e)
 		if result.err == nil {
+			if !bytes.Equal(e.Data, result.data) {
+				for _, name := range []string{"Content-Length", "Content-Encoding", "Etag", "Content-Md5", "Digest", "Content-Digest", "Repr-Digest"} {
+					result.headers.Del(name)
+				}
+			}
 			e.Data, e.Headers = result.data, result.headers
 			if result.policy != "" {
 				w.Header().Set("X-SubGate-Policy", result.policy)

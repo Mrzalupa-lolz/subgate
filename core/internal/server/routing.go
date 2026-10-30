@@ -24,6 +24,27 @@ type routingTier struct {
 }
 
 func (s *Server) transformSubscription(r *http.Request, data []byte, headers http.Header) ([]byte, string, error) {
+	transformed, policy, err := s.transformSubscriptionRouting(r, data, headers)
+	// Preserve the established quota fail-open branch exactly. Errors retain
+	// the gateway's original-response fallback; legacy injections stay below.
+	if err != nil || policy == "quota-exhausted" || r.Method == http.MethodHead || r.PathValue("clientType") != "v2ray-json" {
+		return transformed, policy, err
+	}
+	rules := s.injectionRules("")
+	out, err := routing.ApplyXrayProfiles(transformed, rules, r.PathValue("clientType") == "v2ray-json")
+	if err != nil {
+		return data, policy, err
+	}
+	if string(out) != string(transformed) {
+		policy += "+profile"
+		if headers != nil {
+			headers.Set("Content-Type", "application/json; charset=utf-8")
+		}
+	}
+	return out, policy, nil
+}
+
+func (s *Server) transformSubscriptionRouting(r *http.Request, data []byte, headers http.Header) ([]byte, string, error) {
 	// Cache stores upstream bytes. Policy is evaluated for every request so geo,
 	// pin and health changes take effect even on a subscription cache hit.
 	var raw string
