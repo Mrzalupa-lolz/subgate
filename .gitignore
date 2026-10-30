@@ -1,0 +1,114 @@
+# Go
+bin/
+dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.so.*
+*.dylib
+*.test
+*.out
+*.prof
+*.cpuprofile
+*.memprofile
+*.pprof
+*.go.bak
+
+# Build
+build/
+vendor/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.editor*
+tags
+TAGS
+cscope.*
+
+# Testing & benchmarks
+.coverage
+coverage.out
+*.test.log
+# Golden samples (may be large; don't commit raw logs)
+test/corpora/
+test/corpora/**/*.log
+test/bench/results/
+
+# Secrets & local config
+.env
+.env.local
+.env*
+*.key
+*.pem
+secrets/
+*.sgb
+deploy/core.env
+deploy/agent.env
+deploy/docker-compose.override.yml
+
+# Database & state
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.wal
+*-wal
+*-shm
+state/
+data/
+
+# Logs
+*.log
+logs/
+
+# Temporary
+tmp/
+temp/
+*.tmp
+.cache/
+.gocache/
+artifacts/
+__pycache__/
+*.pyc
+
+# Frontend build
+web/dist/
+web/node_modules/
+web/.next/
+web/out/
+
+# Docker
+docker-compose.override.yml
+*.dockerignore~
+
+# MacOS
+.DS_Store
+.AppleDouble
+.LSOverride
+.Spotlight-V100/
+.Trashes/
+._*
+*.swp
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Generated
+docs/*.md~
+*.generated.go
+token_report.md
+
+# Local API specification
+/remnawave-openapi.json

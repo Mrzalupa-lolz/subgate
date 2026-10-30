@@ -1,0 +1,40 @@
+{
+  "response": [
+    {
+      "uuid": "00000000-0000-4000-8000-000000000001",
+      "viewPosition": 1,
+      "remark": "synthetic-host",
+      "address": "192.0.2.10",
+      "port": 443,
+      "path": null,
+      "sni": null,
+      "host": null,
+      "alpn": null,
+      "fingerprint": null,
+      "isDisabled": false,
+      "xhttpExtraParams": null,
+      "muxParams": null,
+      "sockoptParams": null,
+      "finalMask": null,
+      "inbound": {
+        "configProfileUuid": null,
+        "configProfileInboundUuid": null
+      },
+      "serverDescription": null,
+      "vlessRouteId": null,
+      "pinnedPeerCertSha256": null,
+      "verifyPeerCertByName": null,
+      "shuffleHost": false,
+      "mihomoX25519": false,
+      "mihomoIpVersion": null,
+      "nodes": [],
+      "xrayJsonTemplateUuid": null,
+      "excludeFromSubscriptionTypes": [],
+      "mapper": {},
+      "internalSquads": {
+        "mode": "EXCLUDE",
+        "squads": []
+      }
+    }
+  ]
+}

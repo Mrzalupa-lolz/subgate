@@ -1,0 +1,42 @@
+{
+  "response": {
+    "users": [
+      {
+        "id": 42,
+        "shortUuid": "synthetic-short-id",
+        "username": "synthetic-user",
+        "status": "FUTURE_STATUS",
+        "trafficLimitBytes": 4096,
+        "trafficLimitStrategy": "NO_RESET",
+        "expireAt": "2026-10-14T00:00:00Z",
+        "telegramId": null,
+        "email": null,
+        "description": null,
+        "tag": null,
+        "hwidDeviceLimit": null,
+        "externalSquadUuid": null,
+        "trojanPassword": "synthetic",
+        "vlessUuid": "00000000-0000-4000-8000-000000000001",
+        "ssPassword": "synthetic",
+        "lastTriggeredThreshold": 1,
+        "subRevokedAt": null,
+        "lastTrafficResetAt": null,
+        "createdAt": "2026-10-14T00:00:00Z",
+        "updatedAt": "2026-10-14T00:00:00Z",
+        "subscriptionUrl": "synthetic",
+        "activeInternalSquads": [],
+        "userTraffic": {
+          "usedTrafficBytes": 512,
+          "lifetimeUsedTrafficBytes": 1,
+          "onlineAt": null,
+          "firstConnectedAt": null,
+          "lastConnectedNodeUuid": null
+        },
+        "futureField": {
+          "opaque": true
+        }
+      }
+    ],
+    "total": 1
+  }
+}

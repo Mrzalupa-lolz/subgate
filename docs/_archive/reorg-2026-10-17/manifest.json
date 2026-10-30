@@ -1,0 +1,302 @@
+[
+  {
+    "path": "AGENTS.md",
+    "bytes": 2924,
+    "sha256": "0ce483a21dbc34667aaf6b3626b208bdf26ded704a000f832c45338eac7cbfc6"
+  },
+  {
+    "path": "CLAUDE.md",
+    "bytes": 208,
+    "sha256": "ed6841985e939f0c707cdace949f4b40d0bb5eee2d43cf556f51d61b3cdd29cc"
+  },
+  {
+    "path": "PROMPT.md",
+    "bytes": 5915,
+    "sha256": "55f2e46efa1b06538a35e6cc4ab00afe5fff6f0fb00d04dbcd4494065937f1f8"
+  },
+  {
+    "path": "README.md",
+    "bytes": 3375,
+    "sha256": "de2e37b5a45a38cfbe188d66164ef418225b9fe894adfd1e8a432c448d1782b2"
+  },
+  {
+    "path": "STATUS.md",
+    "bytes": 998,
+    "sha256": "6b50cfa709357035148e18a523d5a5da38644c96838572663946260abe341a68"
+  },
+  {
+    "path": "codex-reorg-prompt.md",
+    "bytes": 7554,
+    "sha256": "682e0723a582f0a28cd3f56d12e217a93c79d623e4661bc3af7446de2fb4b7cd"
+  },
+  {
+    "path": "docs/BLOCKED.md",
+    "bytes": 1562,
+    "sha256": "22447366106b1e7939ae11cf1c50781f2a2ea5b4293062b4e2146b5f24406ba1"
+  },
+  {
+    "path": "docs/DECISIONS.md",
+    "bytes": 1548,
+    "sha256": "b9cac4c81adefb2e784ed0ce60e9a19f81b2b064adf95753eddcf3453c126d81"
+  },
+  {
+    "path": "docs/ENVIRONMENT.md",
+    "bytes": 416,
+    "sha256": "ae021f043277ea16dbd4b4b6445110ba6328f0b0dfe6fc4f30c6c5db5c8ad959"
+  },
+  {
+    "path": "docs/PROJECT_PLAN.md",
+    "bytes": 19839,
+    "sha256": "a3abb849b933c81304f4d1cc48d98c6b6a862534fea633262392506486978b26"
+  },
+  {
+    "path": "docs/TOKEN_PLAN.md",
+    "bytes": 18221,
+    "sha256": "70f685b2cab44bd4aac18e94aa9055af7397e10c8c796c85d2820d4e65201760"
+  },
+  {
+    "path": "docs/api.md",
+    "bytes": 27404,
+    "sha256": "c42f4b8e49d1b8f7a92cef306569e97963920b80b57d4d204de79ac988ab96e0"
+  },
+  {
+    "path": "docs/panel-contract.md",
+    "bytes": 6341,
+    "sha256": "df269526d33fc257ebbf690a31483ff3393c397489bafe400225d3678db5edc3"
+  },
+  {
+    "path": "docs/registry/AUDIT_HISTORY.md",
+    "bytes": 10599,
+    "sha256": "a415c7a039cad7bdd748cc9cf759671659327aa525f5e42870a0a892fe650834"
+  },
+  {
+    "path": "docs/registry/INDEX.md",
+    "bytes": 11269,
+    "sha256": "0781ab8c7a4c43e2002955bb1ab356bee9779dc89971bfa15b7ed24e2d336103"
+  },
+  {
+    "path": "docs/registry/OPERATIONS.md",
+    "bytes": 9310,
+    "sha256": "c3f78b0894a07372e9f4fab860b3999372ea7b9885f45525245b204e86688dfe"
+  },
+  {
+    "path": "docs/registry/QUESTIONS.md",
+    "bytes": 10847,
+    "sha256": "c559eda2c6363305068f645beaa394cf14a28850ebbbd65d3be853c1bc5a5020"
+  },
+  {
+    "path": "docs/registry/REGISTRY_GUIDE.md",
+    "bytes": 1279,
+    "sha256": "520cdd680f76f1daa8f982bcca4d2c5fe97c5d24456361e0ff0f02bf6a3cad23"
+  },
+  {
+    "path": "docs/registry/ROADMAP.md",
+    "bytes": 19575,
+    "sha256": "3cd7221986c56de53b11bff0d968b17376d8eb40cf2d13d9fdcf02748e5db1c6"
+  },
+  {
+    "path": "docs/registry/abuse.md",
+    "bytes": 2140,
+    "sha256": "8d2685896373ece09b8ec844e433bc2874cd5b1e577b5fc6b1b23baaae195efc"
+  },
+  {
+    "path": "docs/registry/activity.md",
+    "bytes": 2864,
+    "sha256": "ffaa3ec1040a1bb2d614971f234362550370ba31393e5d143f56cba849f07a60"
+  },
+  {
+    "path": "docs/registry/agents.md",
+    "bytes": 5059,
+    "sha256": "edf1be1ac7fbd3e7d7aaac44448c1511be309ab51f2b122942d825c08e50bd31"
+  },
+  {
+    "path": "docs/registry/anti-scan.md",
+    "bytes": 2786,
+    "sha256": "ef84a4ce0be9b1de376f0456f5a3a6fb0f5bbbf325f2939545d040849a9086e7"
+  },
+  {
+    "path": "docs/registry/automation.md",
+    "bytes": 1788,
+    "sha256": "cd8c498a3016a9afa95d9fa0b12d3e4006bb43d783a8d3df56a9ddc6c224d3b6"
+  },
+  {
+    "path": "docs/registry/backups.md",
+    "bytes": 4589,
+    "sha256": "c2e6c415279aeff29b175c083fd1e33df94cbdb8c9772a1be87c85a4df60befa"
+  },
+  {
+    "path": "docs/registry/deployment.md",
+    "bytes": 7997,
+    "sha256": "4121106ec8a7784c596864d2c0b770d7a9dfd042d688a64bd4bbe0b6b9e9da32"
+  },
+  {
+    "path": "docs/registry/devices.md",
+    "bytes": 2935,
+    "sha256": "216885273603034a3f81449e03b77264c9f45c092f7ed3ef6e8e6d5085a12216"
+  },
+  {
+    "path": "docs/registry/diagnostics.md",
+    "bytes": 8070,
+    "sha256": "b04593a265354e5b6fb4ceaaf76b82896b39f25df25969c6f981bd53f01a6fb0"
+  },
+  {
+    "path": "docs/registry/drop-detection.md",
+    "bytes": 1001,
+    "sha256": "31e9be40754db019c74568eb713e0e2e94745db8b1cc2854d05809c91888b719"
+  },
+  {
+    "path": "docs/registry/fleet-operations.md",
+    "bytes": 2037,
+    "sha256": "4edc87f46185c0b9c8028220aaf056e6999e307b085f1dccc5a620114a41ff4d"
+  },
+  {
+    "path": "docs/registry/gateway.md",
+    "bytes": 14925,
+    "sha256": "e222bb3328f64d0293b8497c5062e6bde5bc3344cc9706988ea0c1ffe0c2ab85"
+  },
+  {
+    "path": "docs/registry/geo-protection.md",
+    "bytes": 2069,
+    "sha256": "5563a4a62cee6c89325848c3a1bb28a9228eeb1895547cf3c0629848cca5f026"
+  },
+  {
+    "path": "docs/registry/health.md",
+    "bytes": 44944,
+    "sha256": "2697edbdb015091a7153d577e0da5d4d10f6081862b87bf33b2caddd07a94198"
+  },
+  {
+    "path": "docs/registry/injections.md",
+    "bytes": 5084,
+    "sha256": "68dce591e569be53949b5ceaaf0a03b9825403a2785a9fa278f048b3e0132f32"
+  },
+  {
+    "path": "docs/registry/ip-intelligence.md",
+    "bytes": 12648,
+    "sha256": "c432fdb7e76fc7c13a0cea5fb6aba923764165165d6f19ba59746cae1ff8dc38"
+  },
+  {
+    "path": "docs/registry/metrics.md",
+    "bytes": 2864,
+    "sha256": "7bea8d920fbb44c1d47e7ec378c0f30cc0994d4b18823e3c32b3e022cddba2f0"
+  },
+  {
+    "path": "docs/registry/node-optimization.md",
+    "bytes": 1830,
+    "sha256": "3ef3e3cc584eb1fbc0021745756ea81930c0c9761bdf210cd1af8a53aa2c6908"
+  },
+  {
+    "path": "docs/registry/node-protection.md",
+    "bytes": 3732,
+    "sha256": "7ad0a1b5d6a162a1519a7a98ff2dac1a916b91aa389f137f2fa3bb5a53d4e815"
+  },
+  {
+    "path": "docs/registry/notifications.md",
+    "bytes": 3366,
+    "sha256": "f16ef228cdd0d041272d1791fdf90f058e2999fcf53a48dc1096f51d8e96a873"
+  },
+  {
+    "path": "docs/registry/origins.md",
+    "bytes": 2689,
+    "sha256": "c8b5a79b5872a9fb2003cd33573651df13c7f8792b5706e5325ea7f9085ef1c5"
+  },
+  {
+    "path": "docs/registry/panel.md",
+    "bytes": 12983,
+    "sha256": "0884bd4c694643f0e52750a41364590e82bdfc8d68407cbfcf4e98d5b011621d"
+  },
+  {
+    "path": "docs/registry/performance.md",
+    "bytes": 5371,
+    "sha256": "407182d588336ec778178c5d6a22984b374ea3f5cbb37032a3afb9eadd2922dc"
+  },
+  {
+    "path": "docs/registry/plugins.md",
+    "bytes": 645,
+    "sha256": "dd8bbfe18526070119a4729b8397a24948577a989f1bc9132c904052381ec42f"
+  },
+  {
+    "path": "docs/registry/quality.md",
+    "bytes": 17906,
+    "sha256": "9e6814210c567ae76ba719a6d4cb2fe1e0496fa096be31270d6e53fb4e445e15"
+  },
+  {
+    "path": "docs/registry/quotas.md",
+    "bytes": 2512,
+    "sha256": "c67fece65d243a63d7c600fa3a9fba5ee6d96b0888c7e0f4a6ea1d12dd292280"
+  },
+  {
+    "path": "docs/registry/relay-topology.md",
+    "bytes": 678,
+    "sha256": "3ba061214311c9854fc13147d593a34ac932ae51f48bbe1ed5f002ba9a1cee16"
+  },
+  {
+    "path": "docs/registry/routing.md",
+    "bytes": 8440,
+    "sha256": "665e3c79dd61aa51de4e32ebb673a343a1141aaf41bf8e5dcd9bec56cc595b1d"
+  },
+  {
+    "path": "docs/registry/scope.md",
+    "bytes": 7944,
+    "sha256": "47d7b65c2c9d2d0b796940b9c8a364c584c0f10b0c567a01cb3a90bd0c76e08a"
+  },
+  {
+    "path": "docs/registry/security.md",
+    "bytes": 7476,
+    "sha256": "883fcba218a702194a256146e1672cd17671a83daee8f97d2092e6611eac3277"
+  },
+  {
+    "path": "docs/registry/storage.md",
+    "bytes": 13736,
+    "sha256": "5923026537ba460871be6d6b5a86bd9b0c157c2d01f6bc7a9946e15e5f2b7147"
+  },
+  {
+    "path": "docs/registry/subscription-lifecycle.md",
+    "bytes": 1752,
+    "sha256": "5a06fb6be58fab35cdc6ac10fef9613097787b18e078a6f899eba5ba73147961"
+  },
+  {
+    "path": "docs/registry/support.md",
+    "bytes": 4650,
+    "sha256": "0868861bb20a9463cc257b8738e3c815bf4dc2939a127b7ffe19f1b9d07d32e1"
+  },
+  {
+    "path": "docs/registry/telemetry.md",
+    "bytes": 16288,
+    "sha256": "7860d8af9d1307bcc0cb8143c1d937756cab0b3501d05a533a6db5803d4036b3"
+  },
+  {
+    "path": "docs/registry/ui.md",
+    "bytes": 14548,
+    "sha256": "b139bfabdb7be8a94caa8e5089e9c7c172467daf0bc2ef5ca3d888ca6ca42b58"
+  },
+  {
+    "path": "docs/registry/webhooks.md",
+    "bytes": 3519,
+    "sha256": "c4437155fd79ab68bdd741caa24486f265b48178bc85911eb962ab52fc0a5d46"
+  },
+  {
+    "path": "docs/registry/xray-logs.md",
+    "bytes": 9750,
+    "sha256": "23e6e2e19c78088bd75c167fbdbb53ef4e50ede2f97bf96481f34167050388bd"
+  },
+  {
+    "path": "docs/registry/xray-toolkit.md",
+    "bytes": 3223,
+    "sha256": "cefa44b816f74bd91f61d316cc1de4e1487520875fdcc7c391600dc72ae6e876"
+  },
+  {
+    "path": "subgate-ai-prompt-v4.md",
+    "bytes": 54763,
+    "sha256": "2d102128883e37d6e0a87ed936576c226b461a37df7ee5aa1d70a93fd1427544"
+  },
+  {
+    "path": "subgate-feature-inventory.md",
+    "bytes": 14437,
+    "sha256": "dee82d46860d76f405d669edec307486e9720924a2f76415bd3896284cdb147c"
+  },
+  {
+    "path": "token_report.md",
+    "bytes": 3749,
+    "sha256": "c548b438402b22179d0ad54d74e26961ae8f6a00cf7adff775aed977f8ae32d0"
+  }
+]

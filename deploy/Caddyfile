@@ -1,0 +1,4 @@
+{$SUBGATE_DOMAIN:subgate.example.com} {
+    encode zstd gzip
+    reverse_proxy core:8080
+}

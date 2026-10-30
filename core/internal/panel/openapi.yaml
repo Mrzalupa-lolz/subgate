@@ -1,0 +1,254 @@
+openapi: 3.0.0
+info:
+  title: Remnawave Panel API
+  version: 3.0.0
+  description: Remnawave panel REST API for SubGate integration
+
+servers:
+  - url: https://panel.example.com/api
+
+paths:
+  /users:
+    get:
+      operationId: listUsers
+      summary: List all users
+      tags:
+        - users
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserList'
+      security:
+        - bearerAuth: []
+
+  /users/{userId}:
+    get:
+      operationId: getUser
+      summary: Get user by ID
+      tags:
+        - users
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+      security:
+        - bearerAuth: []
+
+  /nodes:
+    get:
+      operationId: listNodes
+      summary: List all nodes
+      tags:
+        - nodes
+      responses:
+        '200':
+          description: List of nodes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NodeList'
+      security:
+        - bearerAuth: []
+
+  /nodes/{nodeId}:
+    get:
+      operationId: getNode
+      summary: Get node by ID
+      tags:
+        - nodes
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Node details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Node'
+      security:
+        - bearerAuth: []
+
+  /subscriptions/{shortUuid}:
+    get:
+      operationId: getSubscription
+      summary: Get subscription by shortUuid
+      tags:
+        - subscriptions
+      parameters:
+        - name: shortUuid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Subscription data
+          content:
+            text/plain:
+              schema:
+                type: string
+      security:
+        - bearerAuth: []
+
+  /bandwidth-stats:
+    get:
+      operationId: getBandwidthStats
+      summary: Get bandwidth statistics
+      tags:
+        - stats
+      parameters:
+        - name: userId
+          in: query
+          schema:
+            type: string
+        - name: nodeId
+          in: query
+          schema:
+            type: string
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [day, week, month]
+      responses:
+        '200':
+          description: Bandwidth statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BandwidthStats'
+      security:
+        - bearerAuth: []
+
+components:
+  schemas:
+    User:
+      type: object
+      required:
+        - id
+        - shortUuid
+        - email
+      properties:
+        id:
+          type: string
+        shortUuid:
+          type: string
+        email:
+          type: string
+        squad:
+          type: string
+        status:
+          type: string
+          enum: [active, disabled, expired]
+        plan:
+          type: string
+        hwidLimit:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    UserList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+
+    Node:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        ipAddress:
+          type: string
+        status:
+          type: string
+          enum: [online, offline, maintenance]
+        tags:
+          type: array
+          items:
+            type: string
+        configProfile:
+          type: string
+        capacityMbps:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    NodeList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Node'
+        total:
+          type: integer
+
+    BandwidthStats:
+      type: object
+      properties:
+        userId:
+          type: string
+        nodeId:
+          type: string
+        bytesUsed:
+          type: integer
+          format: int64
+        bytesLimit:
+          type: integer
+          format: int64
+        period:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer

@@ -1,0 +1,55 @@
+{
+  "response": [
+    {
+      "uuid": "00000000-0000-4000-8000-000000000001",
+      "id": 1,
+      "name": "synthetic-node",
+      "address": "192.0.2.10",
+      "port": null,
+      "proxyUrl": null,
+      "isConnected": true,
+      "isDisabled": false,
+      "isConnecting": false,
+      "lastStatusChange": null,
+      "lastStatusMessage": null,
+      "isTrafficTrackingActive": false,
+      "trafficResetDay": null,
+      "trafficLimitBytes": null,
+      "trafficUsedBytes": null,
+      "notifyPercent": null,
+      "viewPosition": 1,
+      "countryCode": "NL",
+      "consumptionMultiplier": 1,
+      "nodeConsumptionMultiplier": 1,
+      "tags": [],
+      "integrationUuids": [],
+      "ips": [],
+      "createdAt": "2026-10-14T00:00:00Z",
+      "updatedAt": "2026-10-14T00:00:00Z",
+      "configProfile": {
+        "activeConfigProfileUuid": null,
+        "activeInbounds": [
+          {
+            "uuid": "00000000-0000-4000-8000-000000000001",
+            "profileUuid": "00000000-0000-4000-8000-000000000001",
+            "tag": "synthetic-inbound",
+            "type": "future-protocol",
+            "network": null,
+            "security": null,
+            "port": null,
+            "rawInbound": null
+          }
+        ]
+      },
+      "providerUuid": null,
+      "provider": null,
+      "activePluginUuid": null,
+      "system": null,
+      "versions": null,
+      "xrayUptime": 1,
+      "usersOnline": 1,
+      "note": null,
+      "futureField": true
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+[Unit]
+Description=SubGate subscription gateway and console
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=subgate
+Group=subgate
+WorkingDirectory=/var/lib/subgate
+EnvironmentFile=/etc/subgate/core.env
+ExecStart=/usr/local/bin/subgate-core
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=40s
+StateDirectory=subgate
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/subgate
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

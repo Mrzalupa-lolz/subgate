@@ -1,0 +1,20 @@
+name: subgate-demo
+services:
+  core:
+    image: subgate-core:0.2.0
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.core
+    command: ["-demo", "-listen", ":8080", "-database", "file:/data/demo.db"]
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - demo-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 40s
+volumes:
+  demo-data:

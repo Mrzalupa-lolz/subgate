@@ -1,0 +1,45 @@
+name: subgate
+services:
+  core:
+    image: subgate-core:0.2.0
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.core
+    env_file: .env
+    environment:
+      SUBGATE_LISTEN: ":8080"
+      SUBGATE_DATABASE_URL: "file:/data/subgate.db"
+      SUBGATE_BACKUP_PATH: /data/backups
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - core-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    restart: unless-stopped
+    stop_grace_period: 40s
+  caddy:
+    image: caddy:2-alpine
+    profiles: [tls]
+    environment:
+      SUBGATE_DOMAIN: "${SUBGATE_DOMAIN:-subgate.example.com}"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      core:
+        condition: service_healthy
+    restart: unless-stopped
+volumes:
+  core-data:
+  caddy-data:
+  caddy-config:
