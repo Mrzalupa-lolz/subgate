@@ -10,6 +10,7 @@
 [BLOCKED.md](BLOCKED.md) — открытые/закрытые блокеры и следующие шаги — B02/B04/B05/B06/B07.
 [QUESTIONS.md](QUESTIONS.md) — только неотвеченные продуктовые вопросы — зависимый scope.
 [ENVIRONMENT.md](ENVIRONMENT.md) — test host/ресурсы/границы — перед Linux/Docker checks.
+[middleware-integration.md](middleware-integration.md) — распределение функций с PHP middleware и архив отключённого кода.
 [api.md](api.md) — существующий Core HTTP/wire API — вызов/правка endpoint.
 [remnawave-api-summary.md](remnawave-api-summary.md) — нужные panel methods/paths/fields — Reader/action/editor.
 [panel-contract.md](panel-contract.md) — scopes/3.4.5/ogen projection — nullable/enum/drift/token access.
@@ -22,7 +23,7 @@
 [registry/activity.md](registry/activity.md) — log pipeline/journal/segments/retention/query — F19/F20/#16.
 [registry/ip-origins.md](registry/ip-origins.md) — L1–L5/MMDB/ASN/origins/maps — F8/§7/#21.
 [registry/gateway-routing.md](registry/gateway-routing.md) — fail-open/cache/tiers/pins/mirror/relay — F1/F1a/F3/F4/F32/#1/#2/#3/#17.
-[registry/subscription.md](registry/subscription.md) — quotas/injections/WG pool/merge/grace/HWID/presets — F5/F6/F29–F31/#4–#10/#13.
+[registry/subscription.md](registry/subscription.md) — quotas и переданные middleware функции подписки — F5/F6/F29–F31/#4–#10/#13.
 [registry/ops.md](registry/ops.md) — actions/Telegram/backup/restore/automation/support/plugins — F14/F17/F18/F22/F33/F36/#12/#19/#28/#30–#32/#35.
 [registry/quality.md](registry/quality.md) — DONE/commands/budgets/CI/load/chaos/context — acceptance/release.
 [../subgate-feature-inventory.md](../subgate-feature-inventory.md) — Part A reference/Part B требования — уточнить одну строку.

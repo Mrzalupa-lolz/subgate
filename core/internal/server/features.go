@@ -17,7 +17,6 @@ import (
 	"github.com/subgate/subgate/core/internal/notify"
 	"github.com/subgate/subgate/core/internal/panel"
 	"github.com/subgate/subgate/core/internal/quota"
-	"github.com/subgate/subgate/core/internal/routing"
 	"github.com/subgate/subgate/core/internal/youtube"
 )
 
@@ -36,140 +35,6 @@ func (s *Server) loadPersistedQuotas() error {
 		}
 	}
 	return nil
-}
-
-func (s *Server) listInjections(w http.ResponseWriter, r *http.Request) {
-	items, err := s.objects("injections")
-	if err != nil {
-		fail(w, 500, "injection list failed")
-		return
-	}
-	list := []routing.Injection{}
-	for _, raw := range items {
-		var rule routing.Injection
-		if json.Unmarshal(raw, &rule) == nil {
-			rule.Content = "" // Private keys are only returned by the detail API.
-			list = append(list, rule)
-		}
-	}
-	writeJSON(w, 200, map[string]any{"data": list, "total": len(list)})
-}
-
-func (s *Server) getInjection(w http.ResponseWriter, r *http.Request) {
-	var rule routing.Injection
-	if err := s.object("injections", chi.URLParam(r, "id"), &rule); err != nil {
-		fail(w, 404, "injection not found")
-		return
-	}
-	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, 200, rule)
-}
-
-func (s *Server) putInjection(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	if id == "" || len(id) > 128 {
-		fail(w, 400, "invalid injection id")
-		return
-	}
-	var request struct {
-		Name     string `json:"name,omitempty"`
-		RuleType string `json:"rule_type"`
-		Format   string `json:"format,omitempty"`
-		Content  string `json:"content"`
-		Path     string `json:"path,omitempty"`
-		Enabled  *bool  `json:"enabled"`
-	}
-	if !decode(w, r, &request) {
-		return
-	}
-	input := routing.Injection{ID: id, Name: request.Name, RuleType: request.RuleType, Format: request.Format, Content: request.Content, Path: request.Path, Enabled: true}
-	if request.Enabled != nil {
-		input.Enabled = *request.Enabled
-	}
-	if input.RuleType != "append" && input.RuleType != "prepend" && input.RuleType != "patch" && input.RuleType != "remove" && input.RuleType != "xray-profile" {
-		fail(w, 400, "unsupported injection rule")
-		return
-	}
-	if len(input.Content) == 0 || len(input.Content) > 256<<10 {
-		fail(w, 400, "injection content must be between 1 byte and 256 KiB")
-		return
-	}
-	if input.RuleType == "xray-profile" {
-		if input.Format != "xray-json" || input.Path != "" {
-			fail(w, 400, "full profile requires format xray-json and no path")
-			return
-		}
-		if err := routing.ValidateXrayProfile([]byte(input.Content)); err != nil {
-			fail(w, 400, err.Error())
-			return
-		}
-	}
-	if err := s.mutateFeature(r, "injections", id, input, "injection.upsert"); err != nil {
-		if err == errInjectionLimit {
-			fail(w, 400, "at most 100 injection rules are allowed")
-			return
-		}
-		fail(w, 500, "injection save failed")
-		return
-	}
-	_ = s.gateway.Clear()
-	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, 200, input)
-}
-
-func (s *Server) deleteInjection(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	if err := s.mutateFeature(r, "injections", id, nil, "injection.delete"); err != nil {
-		if err == errFeatureNotFound {
-			fail(w, 404, "injection not found")
-			return
-		}
-		fail(w, 500, "injection delete failed")
-		return
-	}
-	_ = s.gateway.Clear()
-	writeJSON(w, 200, map[string]bool{"ok": true})
-}
-
-func (s *Server) injectionRules(userID string) []routing.Injection {
-	raw, err := s.objects("injections")
-	if err != nil {
-		return nil
-	}
-	out := make([]routing.Injection, 0, len(raw))
-	for _, item := range raw {
-		var rule routing.Injection
-		if json.Unmarshal(item, &rule) != nil || !rule.Enabled {
-			continue
-		}
-		if rule.RuleType == "xray-profile" {
-			// This mode is global; legacy per-user metadata does not scope it.
-			if userID == "" {
-				out = append(out, rule)
-			}
-			continue
-		}
-		if userID == "" {
-			continue
-		}
-		var meta struct {
-			Scope   string `json:"scope"`
-			ScopeID string `json:"scope_id"`
-			UserID  string `json:"user_id"`
-		}
-		_ = json.Unmarshal(item, &meta)
-		if meta.UserID != "" && meta.UserID != userID {
-			continue
-		}
-		if meta.Scope == "user" && meta.ScopeID != "" && meta.ScopeID != userID {
-			continue
-		}
-		if meta.Scope != "" && meta.Scope != "all" && meta.Scope != "user" && meta.Scope != "policy" && meta.Scope != "group" {
-			continue
-		}
-		out = append(out, rule)
-	}
-	return out
 }
 
 func (s *Server) listQuotas(w http.ResponseWriter, r *http.Request) { s.listObjects(w, r, "quotas") }
@@ -219,7 +84,6 @@ func (s *Server) deleteQuota(w http.ResponseWriter, r *http.Request) {
 }
 
 var errFeatureNotFound = fmt.Errorf("feature not found")
-var errInjectionLimit = fmt.Errorf("injection rule limit exceeded")
 
 // mutateFeature commits the object and its audit entry together. A nil value
 // deletes an existing object; callers update any memory state after commit.
@@ -251,15 +115,6 @@ func (s *Server) mutateFeature(r *http.Request, kind, id string, value any, acti
 			return errFeatureNotFound
 		}
 	} else {
-		if kind == "injections" {
-			var count int
-			if err := tx.QueryRow("SELECT count(*) FROM sg_objects WHERE kind=? AND id<>?", kind, id).Scan(&count); err != nil {
-				return err
-			}
-			if count >= 100 {
-				return errInjectionLimit
-			}
-		}
 		_, err = tx.Exec("INSERT INTO sg_objects(kind,id,data,updated_at) VALUES(?,?,?,?) ON CONFLICT(kind,id) DO UPDATE SET data=excluded.data,updated_at=excluded.updated_at", kind, id, string(raw), time.Now().Unix())
 		if err != nil {
 			return err

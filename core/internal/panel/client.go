@@ -317,7 +317,8 @@ func (c *Client) ListNodesContext(ctx context.Context) ([]Node, error) {
 }
 func (c *Client) ListNodes() ([]Node, error) { return c.ListNodesContext(context.Background()) }
 func (c *Client) Action(ctx context.Context, kind, id, action string) error {
-	if kind != "users" && kind != "nodes" {
+	// User actions are delegated to remnawave-subscription-middleware.
+	if kind != "nodes" {
 		return fmt.Errorf("unsupported resource")
 	}
 	_, err := c.Request(ctx, "POST", "/api/"+kind+"/"+url.PathEscape(id)+"/actions/"+url.PathEscape(action), nil)

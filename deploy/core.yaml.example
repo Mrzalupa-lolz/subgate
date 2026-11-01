@@ -15,6 +15,7 @@ panel:
   allow_writes: false
   url: https://panel.example.com
   api_token: replace-with-a-scoped-remnawave-api-token
+  # See docs/middleware-integration.md for middleware/routing topology.
   subscription_url: https://subscriptions.example.com/api/sub
   timeout: 15s
   sync_interval: 1m

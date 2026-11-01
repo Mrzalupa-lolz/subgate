@@ -20,6 +20,7 @@ DB/panel/partial-response/late-work full chaos matrix и полный real-fixtu
 Unknown formats/entries, numbers/fields, ambiguous node mappings сохранять; никогда пустая подписка из-за ошибки transform.
 
 ## Deployment modes
+Совместная работа с middleware и распределение ответственности: [integration](../middleware-integration.md).
 Shipped nginx /sub fallback переводит502/503/504 Core в /api/sub origin с query/method, strip credentials, verified TLS.
 TestKilledCoreSubscriptionFallback opt-in в этом аудите SKIP; исторический synthetic nginx PASS сохранён в архиве.
 Caddy сейчас только reverse_proxy без fallback; встроенный Core ACME отсутствует.
@@ -45,4 +46,4 @@ Topology/multi-hop route resolution и subtractive direct/tunneled traffic accou
 Плоские user/node speed series не доказывают relay attribution.
 Начать с одного validated relay edge, cycle rejection и synthetic route fixture; затем один-hop subtractive counter invariant.
 Обязательно исключить двойной учёт, отрицательные bytes и воздействие на panel accounting; multi-hop отдельные tests.
-Правила injections/quotas/request presets вынесены в [subscription](subscription.md), протоколы в [transports](transports.md).
+Квоты и переданные middleware функции подписки описаны в [subscription](subscription.md), протоколы в [transports](transports.md).

@@ -1,4 +1,4 @@
-# Quotas, injections, devices и lifecycle
+# Quotas и функции подписки в middleware
 О чём: F5/F6/F29–F31, пользовательские подписки и panel-native gates.
 Когда читать: exhausted node, extra configs, WG pool, HWID/client rules, grace squad.
 
@@ -16,39 +16,21 @@ All exhausted должна обрабатывать сама Remnawave; B02 тр
 Нет panel per-user/per-node usage source, 80/90% warning transitions, scope priority/usage cleanup и configurable rolling window.
 Enforcement только при refresh, это не data-plane cut-off.
 
-## Injections F5
-Append/prepend/patch/remove, uri/json/yaml detection, JSON Pointer path, max content256KiB, validation/CRUD+atomic audit есть.
-TestApplyInjectionsURIAppendPrependRemove/Base64AndDisabled/JSONPointerAndEndpointPatch/PreservesUnknownAndEnforcesLimits,
-TestInjectionAuditFailureRollsBackMutation PASS.
-Старые append/prepend/patch/remove применяются только после selected policy/pin node.
-Новый явный `xray-profile` глобально добавляет полный независимый Xray-конфиг после routing/health,
-включая passthrough без пользователя/selection и tier-unavailable; quota-exhausted сохранён без добавления.
-Требуются clientType=v2ray-json и распознанная структура Xray; неподходящие тела сохраняются.
-UI «Инъекции» предоставляет исходный JSON-редактор, CRUD/enable/disable, сессию/CSRF; список скрывает content.
-RawMessage сохраняет числа/типы/порядок массивов, хранилище — исходный текст. Проверки: TestFullXrayProfilePreservesNestedValues,
-TestGlobalProfileStageAcrossRoutingBranches, TestProfileAPIAndGatewayLifecycle, TestProfileAPIValidationAndRuleLimit.
-Инструкция и доказательства upstream: [README](../../README.md#полный-xray-профиль-для-happincy).
-Нет full group/user/policy/format scopes, status gating blocked/expired/over-limit, client-core compat matrix,
-RFC6902/Merge Patch полного контракта, sandbox templates, version/dry-run diff/rollback.
-Поддержать WG/AWG/VLESS variants raw/ws/httpupgrade/grpc/h2/xhttp/mKCP/QUIC/REALITY/Vision, opaque future entries.
-Опираться на subscription template панели; не вносить unsupported transport клиенту Happ/Incy/mihomo.
+## Функции, переданные middleware (2026-10-31)
 
-F5b WG/AWG pool per subscriber/device пока нет: one-key lifecycle, non-reuse/collision, revoke и cleanup нужны.
-F5c merge двух upstream subscriptions отсутствует; требуется bounded fetch, preserving unknown/metadata, отказ без пустой подписки.
+F5: инъекции append/prepend/patch/remove и xray-profile, их CRUD и UI вынесены из активного кода.
+Оригиналы и тесты: [архив](../../_archive/middleware-overlap-2026-10-31/README.md).
+Существующие записи SQLite сохранены, но больше не читаются трансформером.
+Произвольный Xray JSON и JSON Pointer не имеют точного аналога в PHP middleware; конфиги переносить вручную.
 
-## Grace/devices/request catalogue
-F29: expired→limited squad snapshot, restore-on-payment; runtime и тестов нет.
-Только test panel writes, snapshot сохраняет исходные squads и выдерживает replay/partial failure; запрет возобновить оплаченный статус по догадке.
-F30 HWID blocked stub, derivation from UA, cards, CUSTOM_SUB_PREFIX — не реализованы.
-Текущее forwarding x-hwid и device-aware cache не являются HWID policy.
-Panel-native HWID limit/history читать через exact API, не дублировать панель.
-Request log who/when/client/decision/bytes/model+OS и version catalogue/outdated flags не реализованы.
-Источники GitHub/App Store/Google Play/F-Droid из inventory сначала проверить terms; ограничить downloads/SSRF и last-good.
-F31 per-app headers/UA/OS rules, Prizrak-Box pxa/pxd-template placeholders, Happ/Incy routing,
-client/subpage template library отсутствуют; не путать upstream header passthrough с response-rule engine.
+F5b WG/AWG pool, F5c merge, F29 grace, F30 HWID/request log/client versions,
+F31 per-app response rules, subscription-page, encrypted channel и support widget обслуживает middleware.
+В SubGate эти возможности не были реализованы; повторно планировать их реализацию не требуется.
+Forwarding HWID/device metadata сохраняется для совместимости; оно не реализует HWID policy.
+
+Сравнение по исходникам и порядок подключения: [middleware-integration](../middleware-integration.md).
 
 ## Scope и проверки
-Encrypted channel rotating path/key derived from sub URL/fixed-size ciphertext optional own-client-only; отсутствует, B05.
-Decoy/masking page и Telegram support widget из Part B также отсутствуют; Core login screen не доказывает decoy.
+Encrypted channel, decoy/masking page и support widget относятся к middleware.
 Любая mutation должна иметь exact shape validation, audit final outcome и adversarial fixtures.
 Функции шире CRUD оцениваются PARTIAL до behavioural workflow и test evidence, историческая сверка inventory — [архив FEATURE_STATUS](../_archive/triage-2026-10-30/docs/FEATURE_STATUS.md).

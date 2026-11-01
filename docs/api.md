@@ -1,6 +1,6 @@
 # Core HTTP API (кодовая версия 0.2.0)
 
-Справочник сверён с `Server.routes` и handlers 2026-10-17; раздел полных Xray-профилей обновлён 2026-10-30. Это описание существующего API, не заявление о готовности всех требований. Исторические критерии — [архив PROJECT_PLAN.md](_archive/triage-2026-10-30/docs/PROJECT_PLAN.md). Полный runtime каждого endpoint отдельно не проверен.
+Справочник сверён с `Server.routes`; дублирующие функции переданы middleware 2026-10-31. Это описание существующего API, не заявление о готовности всех требований. Исторические критерии — [архив PROJECT_PLAN.md](_archive/triage-2026-10-30/docs/PROJECT_PLAN.md). Полный runtime каждого endpoint отдельно не проверен.
 
 Responses are JSON unless stated otherwise. Errors use `{"error":"message"}` with a suitable HTTP status. The API prefix is `/api/v1`. The console uses these same endpoints.
 
@@ -41,7 +41,6 @@ Subscription responses expose `X-Cache-Status: hit`, `miss`, or `stale`; stale r
 | GET | `/nodes`, `/users` | `q`, `offset`, `limit` (default 500, max 1000) |
 | GET | `/nodes/{id}`, `/users/{id}` | Cached object by panel UUID |
 | POST | `/nodes/{id}/actions/{action}` | enable, disable, restart, reset-traffic |
-| POST | `/users/{id}/actions/{action}` | enable, disable, reset-traffic |
 | POST | `/nodes/{id}/probe` | Real TCP/TLS reachability probe; UDP is not verified by a TCP probe |
 | GET | `/health/probes` | Latest recorded probe objects |
 | POST | `/panel/sync` | Fetch and atomically publish a complete panel snapshot |
@@ -63,38 +62,25 @@ Subscription responses expose `X-Cache-Status: hit`, `miss`, or `stale`; stale r
 | GET | `/backups` | Backup file metadata |
 | POST | `/backups` | Owner creates encrypted `.sgb` snapshot |
 | GET | `/backups/{name}` | Owner downloads encrypted backup bytes |
-| GET/PUT/DELETE | `/injections[/{id}]` | List, replace or delete; see payload below |
 | GET/PUT/DELETE | `/quotas[/{id}]` | List, replace or delete; see payload below |
 | GET | `/blocks`, `/youtube` | Saved diagnostic results |
 | POST | `/nodes/{id}/block-check` | Synced inbound TCP/TLS diagnostic from Core |
 | POST | `/youtube/check` | Allowlisted YouTube HTTP diagnostic from Core |
 | POST | `/notifications/test` | Manual notifier dispatch; no sender configured may still return success |
 
-GET for feature collections uses `/injections` or `/quotas`; PUT/DELETE require `/{id}`. GET `/injections/{id}` returns the saved rule including its original content to the authenticated owner (`Cache-Control: no-store`). The injection list returns metadata with an empty content field, never profile keys. Settings have GET only; no versioned hot-reload API. User revoke, host actions/bulk, logs live-tail and first-run wizard endpoints are absent.
+GET `/quotas` lists quota rules; PUT/DELETE require `/quotas/{id}`. Settings have GET only; no versioned hot-reload API. User revoke, host actions/bulk, logs live-tail and first-run wizard endpoints are absent.
 
-### Full Xray profile injections
+### Features delegated to middleware
 
-`PUT /api/v1/injections/{id}` accepts `rule_type: "xray-profile"`, `format: "xray-json"`, `name`, `enabled` and `content` (the original JSON text as a string). `path` must be empty. Existing rules without this type retain their former outbound/list/pointer semantics and routing prerequisites. New rules are global; no scopes, users or groups are required or offered.
+The injection API (`/injections`, `/injections/{id}`) and user action API (`POST /users/{id}/actions/{action}`) are no longer registered. Authenticated requests return 404. Existing injection data stays in SQLite and is ignored. Users remain readable for routing, pins and telemetry; node actions remain available.
 
-The console provides a dedicated full-profile editor and performs syntax checks before sending the original text. The server independently requires one object with nonempty `outbounds`, Xray `protocol` discriminators rather than sing-box `type`, valid JSON syntax, and at most 256 KiB of content. Unknown protocols and extension fields are accepted. Multiple documents, arrays, empty content and unsuitable structures return 400. Saving beyond 100 total rules returns 400; updating existing rules at the limit remains allowed. Mutation and metadata-only audit commit in one transaction.
-
-Only requests with explicit `clientType=v2ray-json` enable the new stage. Public URL: `https://<SubGate>/sub/<shortUuid>/v2ray-json` (also `/<shortUuid>/v2ray-json`). The gateway forwards this suffix, method, query, Accept, Accept-Language, User-Agent, HWID and device metadata to the configured upstream. It does not infer Xray support from the client name. The upstream must actually supply structurally valid Xray profiles. Arrays append whole profiles; a single object becomes an array only in this explicit mode. Other bodies are left unchanged. See [upstream format evidence and import instructions](../README.md#полный-xray-профиль-для-happincy).
-
-Profiles are added after ordinary routing/health filtering, including no local user, no policy match and unavailable tiers. Their internal outbounds/DNS/routing/inbounds are independent and never merged with neighboring profiles. `json.RawMessage` avoids numeric precision loss; JSON whitespace and escaping can change. Rule order is deterministic by ID; identical remarks/tags do not deduplicate separate profiles. Disabled/deleted rules do not apply. Corrupt persisted rules are skipped. The original cache remains free of injections. Output/worker/time limits and original-body fallback remain in force; transformed responses discard body-dependent length/digest headers and preserve subscription metadata. HEAD remains unchanged. Upstream 4xx/5xx cannot produce a WARP-only subscription; existing bounded stale-cache fallback remains. `quota-exhausted` returns exactly the previous original subscription without added profiles.
-
-Validation includes the synthetic linked WireGuard/freedom fixture with IPv6, long hex, ordered noises, unknown fields and large numbers; root-array append/prepend/remove; incompatible bodies; routing branches; API authorization/CSRF/audit rollback; limits; cache-hit/edit/disable/delete and upstream errors. Direct testing of subscription import and WireGuard/noises behavior inside Happ and Incy still requires those applications.
-
-Verification on 2026-10-30 used Ubuntu/WSL with Go 1.26 and GCC (the server requires Linux `O_NOFOLLOW`). Profile server tests and routing/gateway packages passed, including race detection; `go vet ./...`, `node --check web/app.js`, Linux builds of Core/Agent, panel generation drift check and installer checks passed. Headless Chrome completed create → invalid JSON rejection → save → reopen → edit → disable → enable → disable → delete without JavaScript errors. The browser normalizes textarea newlines to LF; the API storage round-trip preserves exactly the submitted content string.
-
-Full `go test ./...` and `go test -race ./...` were run but are not green: five existing health tests fail with `sql: no rows in result set`: `TestMaintenanceSuppression`, `TestMaintenanceSuppressesWindowEntirelyInsideSlowProbe`, `TestQuarantineMinimumAndBackoffStartAfterSlowProbe`, `TestScheduledHealthUnknownCancellationAndAtomicFailure`, `TestScheduledHealthIncompleteEndpointsCannotQuarantine`. All five baseline failures were reproduced in an isolated checkout of unchanged HEAD. The documentation checker is also currently blocked by missing root `AGENTS.md`; this change does not create repository instructions to silence that failure. The executable smoke script was attempted but stops at its obsolete `role == "superadmin"` login assertion: the current owner API intentionally omits roles. No Happ/Incy application or live production upstream was available for verification.
+Original implementation, tests and documentation: [archive](../_archive/middleware-overlap-2026-10-31/README.md). See [ownership and integration](middleware-integration.md). PHP middleware has different configuration formats; this change does not migrate saved rules or deploy middleware.
 
 Live rows expose EMA3/10, recent average/peak/p95, delta bytes, 24-hour usage totals, interval/age, gap/warming/coarse fields. Top-level fields: `data`, `generated_at`, `sample_interval_ms`, `window_seconds`. The in-memory distribution uses at most 12 samples, not a guaranteed one-minute window. History `from`/`to` accept RFC3339 or Unix seconds/milliseconds; the ordered range is at most 31 days and reads at most 200000 rows. Raw speed is cleaned after 24 hours, so a 31-day request does not guarantee 31 days of data. Buckets are computed during reads, not durable rollup tiers.
 
 List responses normally use `{"data":[],"total":N,"offset":0}` for object lists or `{"data":[]}` for telemetry/audit/backup lists. Activity `from`/`to` accept RFC3339 timestamps, and filtering by `domain` is a case-insensitive destination substring over the bounded result set. Activity is not a complete browsing record: attribution requires Xray's user email and depends on logging and collection availability.
 
-## Injections and quotas
-
-`GET /injections`, `PUT /injections/{id}`, and `DELETE /injections/{id}` manage bounded subscription mutations. A PUT accepts `rule_type` (`append`, `prepend`, `patch`, or `remove`), optional `format` (`uri-list`, `json`, or `yaml`), `content` (1 byte to 256 KiB), optional JSON Pointer `path`, and an optional `enabled` flag. Omitted `enabled` defaults to true; explicit false remains disabled. With no format, Core detects the representation. Unknown representations pass through unchanged. Injections currently run after a node is selected through a policy or pin; a passthrough subscription does not apply them.
+## Quotas
 
 `GET /quotas`, `PUT /quotas/{id}`, and `DELETE /quotas/{id}` manage `node_id`, `scope` (`per_user` or `per_node`), `user_id` for per-user rules, positive `limit_bytes`, optional nonnegative `grace_bytes`, `period` (`day`, `week`, `month`, or `rolling`; defaults to month), optional IANA `timezone` (UTC by default), and `enabled`. Rolling means the preceding 30 days; calendar weeks begin on Monday. A PUT returns the normalized rule and server-generated `updated_at`. Rule mutations and their audit records commit atomically. Quota checks use committed telemetry in SQLite, survive Core restarts and duplicate batch replay, and fail open when usage storage cannot be read. Per-node rules include inbound fallback counters when user counters are unavailable; overlapping inbound intervals are suppressed where user observations provide a more specific measurement. When the selected node is exhausted, the gateway retains the original subscription and reports `X-SubGate-Policy: quota-exhausted`. This is a routing decision, not a data-plane traffic cutoff.
 

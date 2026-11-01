@@ -83,11 +83,12 @@ func (s *Server) getUser(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, 200, u)
 }
-func (s *Server) nodeAction(w http.ResponseWriter, r *http.Request) { s.performAction(w, r, "nodes") }
-func (s *Server) userAction(w http.ResponseWriter, r *http.Request) { s.performAction(w, r, "users") }
-func (s *Server) performAction(w http.ResponseWriter, r *http.Request, kind string) {
+
+// User mutations are owned by remnawave-subscription-middleware.
+func (s *Server) nodeAction(w http.ResponseWriter, r *http.Request) {
+	const kind = "nodes"
 	id, action := chi.URLParam(r, "id"), chi.URLParam(r, "action")
-	allowed := action == "enable" || action == "disable" || action == "reset-traffic" || (kind == "nodes" && action == "restart")
+	allowed := action == "enable" || action == "disable" || action == "reset-traffic" || action == "restart"
 	if !allowed {
 		fail(w, 400, "unsupported action")
 		return
@@ -103,11 +104,7 @@ func (s *Server) performAction(w http.ResponseWriter, r *http.Request, kind stri
 	}
 	if s.config.Demo {
 		if action == "enable" {
-			if kind == "nodes" {
-				raw["status"] = "online"
-			} else {
-				raw["status"] = "active"
-			}
+			raw["status"] = "online"
 		}
 		if action == "disable" {
 			raw["status"] = "disabled"

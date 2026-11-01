@@ -19,7 +19,7 @@ TestSecureCookieTracksPublicEndpoint и TestOwnerActivityAccess PASS; это у�
 
 Activity read/export: final outcome, owner, normalized filters/range/count шифруются и audit fail закрывает выдачу данных.
 Общий бюджет60/min по owner переживает смену session/IP; bulk alert пока нет. Детали limits в [api](../api.md).
-Enrollment/manual-sync/quota/injection success audit и mutation атомарны; panel operations ещё требуют final-outcome audit.
+Enrollment/manual-sync/quota success audit и mutation атомарны; panel operations ещё требуют final-outcome audit.
 Storage key rollover после restart: один active32-byte key + до8 previous read keys, regular private files без symlink/FIFO.
 Новые ciphertext active, старые readable previous; автоматического re-encrypt/retirement нет. Key loss делает данные невосстановимыми.
 

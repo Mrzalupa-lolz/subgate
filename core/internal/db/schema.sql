@@ -259,7 +259,8 @@ CREATE TABLE IF NOT EXISTS usage_snapshots (
 
 CREATE INDEX idx_usage_snapshots_date ON usage_snapshots(snapshot_date DESC);
 
--- Injections (custom rules)
+-- Legacy injections: inactive since 2026-10-31 (middleware owns extra configs).
+-- Retained for database compatibility and restoration; no runtime CRUD or execution.
 CREATE TABLE IF NOT EXISTS injections (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,

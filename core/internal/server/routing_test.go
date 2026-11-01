@@ -74,26 +74,9 @@ func TestPolicyInvalidConditionsAndTierReferenceCannotBeDeleted(t *testing.T) {
 	}
 }
 
-func TestInjectionAndQuotaVerticalSlice(t *testing.T) {
+func TestQuotaVerticalSlice(t *testing.T) {
 	s := newTestServer(t)
 	session := loginTest(t, s)
-
-	// The operator can persist a disabled rule, and a browser mutation still
-	// requires the existing CSRF protection.
-	w := perform(s, "PUT", "/api/v1/injections/disabled", map[string]any{
-		"rule_type": "append",
-		"content":   "vless://ignored@example.com:443",
-		"enabled":   false,
-	}, session, "", true)
-	if w.Code != 200 || strings.Contains(w.Body.String(), `"enabled":true`) {
-		t.Fatalf("disabled injection was not persisted: %d %s", w.Code, w.Body)
-	}
-	if w := perform(s, "PUT", "/api/v1/injections/unauthorized", map[string]any{
-		"rule_type": "append",
-		"content":   "vless://ignored@example.com:443",
-	}, session, "", false); w.Code != 403 {
-		t.Fatalf("injection mutation without CSRF accepted: %d", w.Code)
-	}
 
 	if _, err := s.db.Exec(`INSERT INTO sg_objects(kind,id,data,updated_at) VALUES('nodes','fi',?,unixepoch())`, `{"id":"fi","ip_address":"fi.example","status":"online"}`); err != nil {
 		t.Fatal(err)
@@ -106,17 +89,14 @@ func TestInjectionAndQuotaVerticalSlice(t *testing.T) {
 	}
 	_ = s.saveObject("tiers", "first", map[string]any{"id": "first", "enabled": true, "strategy": "roundRobin", "node_ids": []string{"fi"}, "min_healthy": 1})
 	_ = s.saveObject("policies", "default", map[string]any{"id": "default", "enabled": true, "tier_id": "first", "conditions": map[string]any{}})
-	if err := s.saveObject("injections", "auto-uri", map[string]any{"id": "auto-uri", "rule_type": "append", "content": "vless://added@example.com:443", "enabled": true}); err != nil {
-		t.Fatal(err)
-	}
 	req := httptest.NewRequest("GET", "http://console.test/sub/abc", nil)
 	req.SetPathValue("shortUuid", "abc")
 	out, policy, err := s.transformSubscription(req, []byte("vless://one@fi.example:443\n"), nil)
-	if err != nil || policy != "tier+injection" || !strings.Contains(string(out), "added@example.com") {
-		t.Fatalf("automatic URI injection failed: policy=%q err=%v output=%s", policy, err, out)
+	if err != nil || policy != "tier" || string(out) != "vless://one@fi.example:443\n" {
+		t.Fatalf("routing before quota failed: policy=%q err=%v output=%s", policy, err, out)
 	}
 
-	w = perform(s, "PUT", "/api/v1/quotas/user-limit", map[string]any{
+	w := perform(s, "PUT", "/api/v1/quotas/user-limit", map[string]any{
 		"node_id":     "fi",
 		"user_id":     "routing-user",
 		"scope":       "per_user",

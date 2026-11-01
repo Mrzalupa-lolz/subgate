@@ -39,3 +39,5 @@ R03 reader projection: только start/size и response200. Ogen v1.24.0 не
 | Test Xray | 26.7.28 | test GET /api/nodes сообщил версию; live StatsService отдельно не закрыт |
 
 R04: при старте GET /api/system/stats/recap с бюджетом3s сравнивает response.version с generated.SpecVersion. Несовпадение предупреждается в журнале; ошибка/нет scope показываются как unavailable без данных ответа. GET /api/v1/system/status возвращает panel_version={expected,actual,state}; state: not_checked, compatible, mismatch, unavailable. Непроверенные версии не считаются совместимыми. Диагностика не запрещает sync/subscriptions. TestPanelVersionMismatch RED→GREEN и make check PASS2026-10-14; security review без findings.
+
+С 2026-10-31 пользовательские mutations выполняет middleware; таблица scopes выше остаётся справочником API панели. SubGate сохраняет только node actions.

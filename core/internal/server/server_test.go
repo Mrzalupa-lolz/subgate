@@ -99,11 +99,11 @@ func TestAuthenticationCSRFAndOwnerEnforcement(t *testing.T) {
 		t.Fatalf("incorrect login: %d", w.Code)
 	}
 	session := loginTest(t, s)
-	if w := perform(s, "POST", "/api/v1/users/1/actions/disable", nil, session, "", false); w.Code != 403 {
+	if w := perform(s, "POST", "/api/v1/nodes/demo-node-1/actions/disable", nil, session, "", false); w.Code != 403 {
 		t.Fatalf("missing CSRF accepted: %d", w.Code)
 	}
 	for _, origin := range []string{"http://evil.test", "https://console.test", "null"} {
-		r := httptest.NewRequest("POST", "http://console.test/api/v1/users/1/actions/disable", nil)
+		r := httptest.NewRequest("POST", "http://console.test/api/v1/nodes/demo-node-1/actions/disable", nil)
 		r.AddCookie(session)
 		r.Header.Set("Origin", origin)
 		r.Header.Set("X-SubGate-CSRF", "1")
@@ -113,7 +113,7 @@ func TestAuthenticationCSRFAndOwnerEnforcement(t *testing.T) {
 			t.Fatalf("cross origin %s accepted: %d", origin, w.Code)
 		}
 	}
-	if w := perform(s, "POST", "/api/v1/users/1/actions/disable", nil, session, "", true); w.Code != 200 {
+	if w := perform(s, "POST", "/api/v1/nodes/demo-node-1/actions/disable", nil, session, "", true); w.Code != 200 {
 		t.Fatalf("authorized mutation: %d %s", w.Code, w.Body)
 	}
 	if _, err := s.db.Exec("UPDATE admin_users SET role='viewer' WHERE username='admin'"); err != nil {
@@ -125,7 +125,7 @@ func TestAuthenticationCSRFAndOwnerEnforcement(t *testing.T) {
 	if w := perform(s, "GET", "/api/v1/activity", nil, session, "", false); w.Code != 200 {
 		t.Fatalf("owner activity blocked by legacy role: %d", w.Code)
 	}
-	if w := perform(s, "POST", "/api/v1/users/1/actions/enable", nil, nil, session.Value, false); w.Code != 200 {
+	if w := perform(s, "POST", "/api/v1/nodes/demo-node-1/actions/enable", nil, nil, session.Value, false); w.Code != 200 {
 		t.Fatalf("owner bearer write blocked by legacy role: %d", w.Code)
 	}
 	if w := perform(s, "POST", "/api/v1/auth/logout", nil, session, "", true); w.Code != 200 {

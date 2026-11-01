@@ -15,10 +15,10 @@ Scopes/доступность API-token: [panel-contract](panel-contract.md). Pr
 | GET | /api/system/stats/recap | startup version | response.version (3s startup budget Core) | runtime |
 | GET | /api/sub/{shortUuid} | upstream subscription | raw subscription body+headers, shortUuid | runtime |
 | GET | /api/sub/{shortUuid}/{clientType} | format subscription | clientType: stash,singbox,mihomo,json,v2ray-json,clash | runtime |
-| POST | /api/users/{userId}/actions/enable | enable user | numeric userId, schema-defined action response | generic action |
-| POST | /api/users/{userId}/actions/disable | disable user | numeric userId | generic action |
-| POST | /api/users/{userId}/actions/reset-traffic | reset panel user traffic | numeric userId; не Xray StatsService reset | generic action |
-| POST | /api/users/{userId}/actions/revoke | revoke subscription | numeric userId; body revokeOnlyPasswords?,shortUuid? | planned |
+| POST | /api/users/{userId}/actions/enable | enable user | numeric userId, schema-defined action response | delegated to middleware |
+| POST | /api/users/{userId}/actions/disable | disable user | numeric userId | delegated to middleware |
+| POST | /api/users/{userId}/actions/reset-traffic | reset panel user traffic | numeric userId; не Xray StatsService reset | delegated to middleware |
+| POST | /api/users/{userId}/actions/revoke | revoke subscription | numeric userId; body revokeOnlyPasswords?,shortUuid? | delegated to middleware |
 | POST | /api/nodes/{uuid}/actions/enable | enable node | uuid | generic action |
 | POST | /api/nodes/{uuid}/actions/disable | disable node | uuid | generic action |
 | POST | /api/nodes/{uuid}/actions/restart | restart node | uuid | generic action |

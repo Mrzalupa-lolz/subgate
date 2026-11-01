@@ -3,12 +3,14 @@
 Когда читать: операторские действия, уведомления, backup/restore или optional workflows.
 
 ## Panel operations F17
-Код: core/internal/server/api.go:performAction, panel/client.go:Action, web/app.js.
-User/node enable/disable/reset/restart entrypoints есть, но generic Action не гарантирует точный endpoint/body/id для каждой операции.
+Код: core/internal/server/api.go:nodeAction, panel/client.go:Action, web/app.js.
+Node enable/disable/reset/restart entrypoints есть, но generic Action не гарантирует точный endpoint/body/id для каждой операции.
 Write gate default GET-only; рабочие production credentials этим аудитом не использовались.
 Нет complete revoke/hosts bulk workflow, global search/deep links, гарантированного final outcome audit и confirmations всего каталога.
 Одна owner учётка имеет полный доступ; не восстанавливать RBAC из старого roadmap.
 Сначала сверить OpenAPI и test-panel fixture; не считать наличие POST route разрешением писать в production.
+
+Управление пользователями передано middleware; прежние handlers/UI в [архиве](../../_archive/middleware-overlap-2026-10-31/README.md).
 
 ## Telegram F14
 notify.Telegram Send и Dispatcher dedupe/cooldown/quiet hours/test endpoint есть.

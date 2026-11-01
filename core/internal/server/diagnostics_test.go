@@ -99,23 +99,23 @@ func TestYouTubeAPIDoesNotFollowRedirectToInternalService(t *testing.T) {
 	}
 }
 
-func TestInjectionAuditFailureRollsBackMutation(t *testing.T) {
+func TestQuotaAuditFailureRollsBackMutation(t *testing.T) {
 	s := newTestServer(t)
 	session := loginTest(t, s)
-	input := map[string]any{"rule_type": "append", "content": "vless://one@example.com:443"}
-	if w := perform(s, "PUT", "/api/v1/injections/one", input, session, "", true); w.Code != 200 {
+	input := map[string]any{"node_id": "fi", "scope": "per_node", "limit_bytes": 100, "period": "day", "enabled": true}
+	if w := perform(s, "PUT", "/api/v1/quotas/one", input, session, "", true); w.Code != 200 {
 		t.Fatal(w.Body)
 	}
 	if _, err := s.db.Exec("DROP TABLE audit_log"); err != nil {
 		t.Fatal(err)
 	}
 	for _, method := range []string{"PUT", "DELETE"} {
-		if w := perform(s, method, "/api/v1/injections/one", input, session, "", true); w.Code != 500 {
+		if w := perform(s, method, "/api/v1/quotas/one", input, session, "", true); w.Code != 500 {
 			t.Errorf("unaudited %s succeeded: %d %s", method, w.Code, w.Body)
 		}
 	}
 	var stored map[string]any
-	if err := s.object("injections", "one", &stored); err != nil {
-		t.Fatal("audit failure deleted injection:", err)
+	if err := s.object("quotas", "one", &stored); err != nil {
+		t.Fatal("audit failure deleted quota:", err)
 	}
 }

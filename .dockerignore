@@ -26,3 +26,5 @@ temp
 deploy/.env
 deploy/core.env
 deploy/agent.env
+_archive
+remnawave-subscription-middleware

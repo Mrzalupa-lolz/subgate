@@ -1,5 +1,7 @@
 # Feature inventory: what every project does, and how SubGate merges it
 
+> Актуальное решение от 2026-10-31: функции подписки и управления пользователями переданы middleware. Таблицы ниже — исторический каталог источников, а не текущий план повторной реализации. См. [распределение функций](docs/middleware-integration.md) и [архив](./_archive/middleware-overlap-2026-10-31/README.md).
+
 Sources read (README level, October 2026): `Case211/remnawave-admin` (v5.1.1), `Mrvibecodic/remnawave-subscription-middleware`, `DigneZzZ/remnawave-scripts`, `legiz-ru/my-remnawave`, `dotX12/traffic-guard` (+ `DonMatteoVPN/TrafficGuard-auto`, see note), `jestivald/node-accelerator`, `Case211/node-diagnostic`, `DonMatteoVPN/Reshala-Remnawave-Bedolaga`, `saveksme/multitest` (+ `censorcheck`), `oximeter-cloud/xray-monitor`, `remnawave/panel`.
 
 Notes on reliability of this inventory:
