@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/subgate/subgate/core/internal/gateway"
 	"github.com/subgate/subgate/core/internal/panel"
 )
 
@@ -85,7 +84,7 @@ func TestEnrollmentAndSyncAuditFailures(t *testing.T) {
 		s.config.Demo = false
 		s.panel.Close()
 		s.panel = panel.NewClient(upstream.URL, "test", s.logger)
-		entry := gateway.CacheEntry{Data: []byte("last-good"), StoredAt: time.Now(), ExpiresAt: time.Now().Add(time.Minute)}
+		entry := legacySnapshot{Data: []byte("last-good"), StoredAt: time.Now(), ExpiresAt: time.Now().Add(time.Minute)}
 		if err := s.Save("audit-snapshot", entry); err != nil {
 			t.Fatal(err)
 		}

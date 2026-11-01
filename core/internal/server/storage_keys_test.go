@@ -15,7 +15,6 @@ import (
 
 	"github.com/subgate/subgate/core/internal/config"
 	"github.com/subgate/subgate/core/internal/db"
-	"github.com/subgate/subgate/core/internal/gateway"
 	"github.com/subgate/subgate/pkg/wire"
 )
 
@@ -73,7 +72,7 @@ func TestActivityKeyRotation(t *testing.T) {
 	if _, err := s.db.Exec("INSERT INTO sg_activity(node_id,user_id,timestamp,payload) VALUES(?,?,?,?)", "demo-node-1", "1", event.Timestamp.UnixMilli(), payload); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Save("rotate-cache", gateway.CacheEntry{Data: []byte("synthetic subscription"), StoredAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}); err != nil {
+	if err := s.Save("rotate-cache", legacySnapshot{Data: []byte("synthetic subscription"), StoredAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}); err != nil {
 		t.Fatal(err)
 	}
 	if w := perform(s, "GET", "/api/v1/activity?domain=legacy", nil, session, "", false); w.Code != 200 {
@@ -144,7 +143,7 @@ func TestActivityKeyRotation(t *testing.T) {
 	if raw, err := only.decrypt(persisted, "demo-node-1:1"); err != nil || !bytes.Contains(raw, []byte("rotated.example.invalid")) {
 		t.Fatal("new activity not current-key encrypted", err)
 	}
-	if err := s.Save("new-cache", gateway.CacheEntry{Data: []byte("new cache")}); err != nil {
+	if err := s.Save("new-cache", legacySnapshot{Data: []byte("new cache")}); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.db.QueryRow("SELECT payload FROM sg_snapshots WHERE key='new-cache'").Scan(&persisted); err != nil {

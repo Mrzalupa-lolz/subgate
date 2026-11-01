@@ -17,8 +17,8 @@ notify.Telegram Send и Dispatcher dedupe/cooldown/quiet hours/test endpoint е�
 AllowedUserIDs сейчас используются как ChatIDs, не авторизация bot commands; нет polling/commands/buttons/topics/RU-EN/proxy workflow.
 Нет automatic health/drop/quota/bandwidth/log transition producers и recovery messages.
 При отсутствии sender Dispatcher возвращает nil; success test endpoint не доказывает delivery.
-Нужны per-category health/drops/youtube/16-20/anti-scan/bandwidth/log/system topics, allowlisted /status/node/user/top/ip.
-Quarantine/ban buttons требуют отдельной policy; по D01 обвинительные signals не могут автоматически наказывать user.
+Нужны per-category health/drops/youtube/16-20/request-observations/bandwidth/log/system topics, allowlisted /status/node/user/top/ip.
+Для сигналов нарушений нужны ссылки на журнал и проверяемые признаки. Реализован дополнительный Linux worker с nDPI, длительными окнами перегрузки и временным TC/TBF shaper. Автоматика выключена до настройки протоколов/лимита/срока и точной атрибуции выделенного пути аккаунта. TTL обслуживает независимый systemd timer. См. [NODE_MONITORING.md](../NODE_MONITORING.md).
 Email/S3 не делать; TG test delivery в этом docs-аудите не отправлялась.
 
 ## Backup F18 и recovery

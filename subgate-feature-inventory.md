@@ -1,5 +1,7 @@
 # Feature inventory: what every project does, and how SubGate merges it
 
+> Scope 2026-11-01: SubGate автоматизирует мониторинг Remnawave/Xray. Подписки и управление пользователями переданы middleware. F23 исключён; F25 TC/TBF shaper, nDPI-коллектор и длительные окна перегрузки реализованы в дополнительном Linux worker. Нужны выделенные пути аккаунтов и конфигурация; автоматика выключена, лимит/срок выберет владелец. Part A — справочник, актуальный план: docs/PROJECT_PLAN.md; подключение: docs/NODE_MONITORING.md.
+
 > Актуальное решение от 2026-10-31: функции подписки и управления пользователями переданы middleware. Таблицы ниже — исторический каталог источников, а не текущий план повторной реализации. См. [распределение функций](docs/middleware-integration.md) и [архив](./_archive/middleware-overlap-2026-10-31/README.md).
 
 Sources read (README level, October 2026): `Case211/remnawave-admin` (v5.1.1), `Mrvibecodic/remnawave-subscription-middleware`, `DigneZzZ/remnawave-scripts`, `legiz-ru/my-remnawave`, `dotX12/traffic-guard` (+ `DonMatteoVPN/TrafficGuard-auto`, see note), `jestivald/node-accelerator`, `Case211/node-diagnostic`, `DonMatteoVPN/Reshala-Remnawave-Bedolaga`, `saveksme/multitest` (+ `censorcheck`), `oximeter-cloud/xray-monitor`, `remnawave/panel`.
@@ -76,48 +78,49 @@ Users, nodes, hosts, internal/external squads, config profiles with tags, snippe
 
 ## Part B. The merged catalogue (union) → SubGate
 
-Legend: **v4** = already in prompt v4; **NEW** = added in prompt v5; **INT** = consumed through the panel's own feature instead of duplicated.
+Current scope takes precedence over this source catalogue. **OUT** = delegated to middleware or outside monitoring; **PLAN** = candidate, not a claim of implementation. Historical v4/NEW labels are provenance only. Actual implementation: docs/PROJECT_PLAN.md.
 
 | # | Function | Sources | SubGate ID |
 |---|---|---|---|
-| 1 | Subscription proxy, fail-open, caching | middleware, my-remnawave | F1 (v4) |
-| 2 | RU-mirror mode (client → mirror → origin), standalone vs panel-side | middleware | F1a **NEW** |
-| 3 | Balancing, tiers, pinning, quarantine, health | XBM, (none of the repos) | F2–F4 (v4) |
-| 4 | Injections incl. WG/AWG/VLESS extra configs with core-compat matrix and status gating | middleware | F5 extended **NEW** |
-| 5 | WG/AWG config pool per subscriber/device | middleware | F5b **NEW** |
-| 6 | Merge of two subscriptions | middleware | F5c **NEW** |
-| 7 | Grace squad / soft expiry with snapshot-restore | middleware | F29 **NEW** |
-| 8 | HWID block stub, HWID from User-Agent, device cards | middleware, admin, panel | F30 **NEW** |
-| 9 | Request log + client-version catalogue + outdated flag | middleware, panel (history API) | F30 **NEW** |
-| 10 | Per-app response rules & preset library (Prizrak-Box, Happ routing, client catalogues, subpage templates) | middleware, my-remnawave | F31 **NEW** |
-| 11 | Webhook fan-out with re-signing | middleware | F14 extended **NEW** |
-| 12 | Masking/decoy page + support chat widget | middleware | F7/F12 + F33 **NEW** |
-| 13 | Encrypted subscription channel | middleware | optional, own-client only (listed in ideas) |
-| 14 | Per-node quotas, geo-block, subscriber map, 16–20, drops, YouTube region, anti-scan, hot settings, console | XBM | F6–F13 (v4) |
+| 1 | Subscription proxy, fail-open, caching | middleware, my-remnawave | OUT — middleware; не реализовывать в SubGate |
+| 2 | RU-mirror mode (client → mirror → origin), standalone vs panel-side | middleware | OUT — middleware; не реализовывать в SubGate |
+| 3 | Health/quarantine как мониторинг; subscription balancing/tiers/pins исключены | XBM, (none of the repos) | Monitoring only |
+| 4 | Injections incl. WG/AWG/VLESS extra configs with core-compat matrix and status gating | middleware | OUT — middleware; не реализовывать в SubGate |
+| 5 | WG/AWG config pool per subscriber/device | middleware | OUT — middleware; не реализовывать в SubGate |
+| 6 | Merge of two subscriptions | middleware | OUT — middleware; не реализовывать в SubGate |
+| 7 | Grace squad / soft expiry with snapshot-restore | middleware | OUT — middleware; не реализовывать в SubGate |
+| 8 | HWID block stub, HWID from User-Agent, device cards | middleware, admin, panel | OUT — middleware; не реализовывать в SubGate |
+| 9 | Request log + client-version catalogue + outdated flag | middleware, panel (history API) | OUT — middleware; не реализовывать в SubGate |
+| 10 | Per-app response rules & preset library (Prizrak-Box, Happ routing, client catalogues, subpage templates) | middleware, my-remnawave | OUT — middleware; не реализовывать в SubGate |
+| 11 | Webhook fan-out with re-signing | middleware | OUT — middleware; не реализовывать в SubGate |
+| 12 | Masking/decoy page + support chat widget | middleware | OUT — middleware; не реализовывать в SubGate |
+| 13 | Encrypted subscription channel | middleware | OUT — middleware; не реализовывать в SubGate |
+| 14 | Node traffic/quota analytics, connection origins, drops, monitoring settings and console | XBM | Monitoring subset; без subscription requests |
 | 15 | Real-time per-user speed (per second) | (new) | F16 (v4) |
 | 16 | Activity journal with compact storage + destination categories | xray-monitor, admin | F20 (v4) + categories **NEW** |
 | 17 | Multi-hop relay topology and subtractive traffic accounting | xray-monitor | F32 **NEW** |
-| 18 | Abuse engine: 7 analyzers, scoring, escalation ladder, delayed measures, CGNAT buffer, P2P/torrent | admin, panel (torrent blocker) | F21 **NEW** |
-| 19 | Rules/automation engine (builder, schedules, templates, logs) | admin, Reshala roadmap | F22 **NEW** |
-| 20 | Node protection (nftables, ban-once, per-IP limits, UDP bulk, ctguard, blocklists, fleet whitelist sync, safety timer) | node-accelerator, traffic-guard(+auto), node-diagnostic | F23 **NEW** |
-| 21 | Threat lists (scanner, government, skipa, Spamhaus DROP, FireHOL, Tor) as IP-intel tags | traffic-guard, node-accelerator | §7 L5 **NEW** |
-| 22 | Node optimizer/advisor with dry-run + rollback (BBR/cake, RPS/RFS/XPS, NIC, limits, MSS, zram, journald, XanMod) | node-accelerator, node-diagnostic, multitest | F24 **NEW** |
-| 23 | Diagnostic catalogue: 27 checks, 19-service reachability, IP reputation, open-port audit, cert expiry, retransmit analysis | node-diagnostic, node-accelerator, multitest | F24 **NEW** |
-| 24 | Blocking radar: DNS/IP/HTTP(S)/DPI/regional, iperf3 to RU servers, benchmarks | multitest/censorcheck | F9 extended + F24 **NEW** |
-| 25 | Per-client-IP eBPF shaper with dynamic penalty | node-diagnostic, Reshala, admin | F25 **NEW** (optional) |
-| 26 | Fleet ops: remote terminal, script catalogue, mass commands, auto-capture, Docker hygiene, node/Xray-core lifecycle, log rotation, auto-restart, WARP/Tor outbound | admin, Reshala, remnawave-scripts | F26 **NEW** (optional) |
-| 27 | Xray config toolkit: linter, generators (XHTTP via nginx, Selfsteal/Reality dest, WARP), balancer/observatory editor, snippets, import/export of links | admin, my-remnawave, remnawave-scripts | F27 **NEW** |
-| 28 | Backups of SubGate **and the panel**, scheduled, Telegram, safe restore with version check, pre-update snapshots | scripts, admin, middleware | F18 extended **NEW** |
-| 29 | Prometheus `/metrics` + Grafana dashboards + sync watchdog (optional exports) | admin | F35 **NEW** |
-| 30 | Support desk (tickets, SLA, templates), customer warnings (TG/email), outbound mail | admin, middleware | F33 **NEW** (optional) |
-| 31 | Built-in full mail server (MX, DKIM/SPF/DMARC, inbound) | admin | F33b optional, **not recommended for v1** |
+| 18 | Internal Xray anomalies, nDPI metadata, sustained overload, review and independent confirmations | Xray, Linux worker | F21 implemented; dedicated account paths required for automatic attribution; production validation pending |
+| 19 | Rules/automation engine (builder, schedules, templates, logs) | admin, Reshala roadmap | PLAN — отдельная оценка по текущему scope |
+| 20 | Исключено: node protection/firewall/анти-DDoS | Решение владельца 2026-11-01 | F23 removed |
+| 21 | Threat lists (scanner, government, skipa, Spamhaus DROP, FireHOL, Tor) as IP-intel tags | traffic-guard, node-accelerator | PLAN — отдельная оценка по текущему scope |
+| 22 | Node optimizer/advisor with dry-run + rollback (BBR/cake, RPS/RFS/XPS, NIC, limits, MSS, zram, journald, XanMod) | node-accelerator, node-diagnostic, multitest | PLAN — отдельная оценка по текущему scope |
+| 23 | Diagnostic catalogue: 27 checks, 19-service reachability, IP reputation, open-port audit, cert expiry, retransmit analysis | node-diagnostic, node-accelerator, multitest | PLAN — отдельная оценка по текущему scope |
+| 24 | Blocking radar: DNS/IP/HTTP(S)/DPI/regional, iperf3 to RU servers, benchmarks | multitest/censorcheck | PLAN — отдельная оценка по текущему scope |
+| 25 | Временный TC/TBF shaper для подтверждённых крупных нарушителей | Высокая уверенность, TTL/watchdog, точная атрибуция, audit/reconciliation; лимит/срок выберет владелец | F25 implemented, off by default; isolated TC test PASS, production validation pending |
+| 26 | Fleet ops: remote terminal, script catalogue, mass commands, auto-capture, Docker hygiene, node/Xray-core lifecycle, log rotation, auto-restart, WARP/Tor outbound | admin, Reshala, remnawave-scripts | PLAN — отдельная оценка по текущему scope |
+| 27 | Xray config toolkit: linter, generators (XHTTP via nginx, Selfsteal/Reality dest, WARP), balancer/observatory editor, snippets, import/export of links | admin, my-remnawave, remnawave-scripts | PLAN — отдельная оценка по текущему scope |
+| 28 | Backups of SubGate **and the panel**, scheduled, Telegram, safe restore with version check, pre-update snapshots | scripts, admin, middleware | PLAN — отдельная оценка по текущему scope |
+| 29 | Prometheus `/metrics` + Grafana dashboards + sync watchdog (optional exports) | admin | PLAN — отдельная оценка по текущему scope |
+| 30 | Support desk (tickets, SLA, templates), customer warnings (TG/email), outbound mail | admin, middleware | PLAN — отдельная оценка по текущему scope |
+| 31 | Built-in full mail server (MX, DKIM/SPF/DMARC, inbound) | admin | PLAN — отдельная оценка по текущему scope |
 | 32 | Billing/CRM (Bedolaga), referrals, promo, payments | admin | integration only (non-goal to rebuild) |
-| 33 | Android app / push | admin | PWA + Web Push instead **NEW** |
-| 34 | Installers/lifecycle for panel & node (one-liner, idempotent, mirror fallback, pinned versions, signed releases) | scripts, node-accelerator | F15/installer + F26 **NEW** |
-| 35 | Plugin system | admin | F36 **NEW** (sandboxed, later) |
-| 36 | Panel-native features to consume, not duplicate: HWID limits, torrent-blocker reports, request history, bandwidth stats, shared ASN/IP lists, billing nodes | panel | INT **NEW** |
+| 33 | Android app / push | admin | PLAN — отдельная оценка по текущему scope |
+| 34 | Installers/lifecycle for panel & node (one-liner, idempotent, mirror fallback, pinned versions, signed releases) | scripts, node-accelerator | PLAN — отдельная оценка по текущему scope |
+| 35 | Plugin system | admin | PLAN — отдельная оценка по текущему scope |
+| 36 | Panel-native features to consume, not duplicate: HWID limits, torrent-blocker reports, request history, bandwidth stats, shared ASN/IP lists, billing nodes | panel | PLAN — отдельная оценка по текущему scope |
 
 ### Overlap decisions
-- Where the panel already provides a capability (HWID limit, torrent blocker, request history), SubGate **reads and visualises** it, and **pushes** its own curated data (e.g. ASN lists) into the panel's shared lists where an API exists.
-- Where `remnawave-admin` already provides a capability, SubGate re-implements it **from public descriptions only (clean-room; AGPL-3.0)**, so the operator can run SubGate alone. The optional connector remains for coexistence.
-- Two modules are deliberately risky and flagged optional: the **full mail server** and the **eBPF shaper**.
+- Subscription delivery, subscriber administration, HWID/UA request analysis and client UX belong to remnawave-subscription-middleware. SubGate does not duplicate them.
+- Consume panel telemetry and torrent-blocker reports where the documented API supports them; integration is planned, not implemented. A panel label alone does not authorize shaping.
+- Implement internal traffic analysis around evidence and account attribution. Other projects remain references, not a commitment to recreate their entire feature set.
+- Temporary shaper F25 is implemented for dedicated account interfaces; external node protection F23 is excluded. Current state and release criteria: docs/PROJECT_PLAN.md.

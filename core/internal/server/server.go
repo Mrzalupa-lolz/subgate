@@ -22,11 +22,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/subgate/subgate/core/internal/activity"
-	"github.com/subgate/subgate/core/internal/antiscan"
 	"github.com/subgate/subgate/core/internal/blocks"
 	"github.com/subgate/subgate/core/internal/config"
 	"github.com/subgate/subgate/core/internal/db"
-	"github.com/subgate/subgate/core/internal/gateway"
 	"github.com/subgate/subgate/core/internal/health"
 	"github.com/subgate/subgate/core/internal/ipintel"
 	"github.com/subgate/subgate/core/internal/metrics"
@@ -44,7 +42,6 @@ type Server struct {
 	router             chi.Router
 	http               *http.Server
 	panel              *panel.Client
-	gateway            *gateway.Gateway
 	intel              *ipintel.Engine
 	aead               cipher.AEAD
 	previousAEADs      []cipher.AEAD
@@ -64,14 +61,11 @@ type Server struct {
 	activityReadBudget activityReadBudget
 	loginMu            sync.Mutex
 	attempts           map[string]attempt
-	roundMu            sync.Mutex
-	roundRobin         map[string]uint64
 	liveStore          *tsdb.LiveStore
 	metrics            *metrics.Registry
 	quota              *quota.Manager
 	quotaMu            sync.Mutex // Keep committed rule mutations and manager updates in order.
 	notify             *notify.Dispatcher
-	antiscan           *antiscan.Engine
 	blocks             *blocks.Detector
 	journal            *activity.Journal
 	metricRequests     *metrics.Counter
@@ -100,7 +94,7 @@ func New(cfg *config.Config, database *db.DB, logger *slog.Logger) (*Server, err
 		senders = append(senders, &notify.Telegram{Token: cfg.Telegram.Token, ChatIDs: cfg.Telegram.AllowedUserIDs, Logger: logger})
 	}
 	notifyQuiet := notify.QuietHours{Enabled: cfg.Telegram.QuietHours.Enabled, StartHour: cfg.Telegram.QuietHours.StartHour, EndHour: cfg.Telegram.QuietHours.EndHour, Location: quietLocation}
-	s := &Server{config: cfg, db: database, logger: logger, router: chi.NewRouter(), ctx: ctx, cancel: cancel, started: time.Now(), attempts: map[string]attempt{}, roundRobin: map[string]uint64{}, liveStore: tsdb.NewLiveStore(100000), metrics: registry, quota: quota.New(), antiscan: antiscan.NewEngine(logger), blocks: blocks.New(blocks.Config{}), journal: activity.NewJournal(logger), notify: notify.NewDispatcher(logger, cfg.Telegram.AlertCooldown, notifyQuiet, senders...)}
+	s := &Server{config: cfg, db: database, logger: logger, router: chi.NewRouter(), ctx: ctx, cancel: cancel, started: time.Now(), attempts: map[string]attempt{}, liveStore: tsdb.NewLiveStore(100000), metrics: registry, quota: quota.New(), blocks: blocks.New(blocks.Config{}), journal: activity.NewJournal(logger), notify: notify.NewDispatcher(logger, cfg.Telegram.AlertCooldown, notifyQuiet, senders...)}
 	s.metricRequests = registry.MustCounter("subgate_http_requests_total", "HTTP requests handled by SubGate")
 	s.metricErrors = registry.MustCounter("subgate_http_errors_total", "HTTP requests that returned an error")
 	s.metricLatency = registry.MustHistogram("subgate_http_request_duration_seconds", "HTTP request duration", []float64{0.005, 0.01, 0.025, 0.1, 0.5, 1, 5})
@@ -125,13 +119,6 @@ func New(cfg *config.Config, database *db.DB, logger *slog.Logger) (*Server, err
 			logger.Warn("IP dataset unavailable", "error", err)
 		}
 	}
-	s.gateway = gateway.NewGateway(logger)
-	upstream := cfg.Panel.SubscriptionURL
-	if upstream == "" && cfg.Panel.URL != "" {
-		upstream = strings.TrimRight(cfg.Panel.URL, "/") + "/api/sub"
-	}
-	s.gateway.Configure(upstream, s)
-	s.gateway.Transform = s.transformSubscription
 	if err := s.loadPersistedQuotas(); err != nil {
 		logger.Warn("quota state unavailable", "error", err)
 	}
@@ -143,6 +130,15 @@ func (s *Server) initialize() error {
 	_, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS sg_objects(kind TEXT NOT NULL,id TEXT NOT NULL,data TEXT NOT NULL,updated_at INTEGER NOT NULL,PRIMARY KEY(kind,id));
  CREATE TABLE IF NOT EXISTS sg_sessions(token_hash TEXT PRIMARY KEY,admin_id INTEGER NOT NULL,expires_at INTEGER NOT NULL);
  CREATE TABLE IF NOT EXISTS sg_enrollment(token_hash TEXT PRIMARY KEY,node_id TEXT NOT NULL,expires_at INTEGER NOT NULL,used INTEGER NOT NULL DEFAULT 0);
+ CREATE TABLE IF NOT EXISTS sg_monitor_states(id TEXT PRIMARY KEY,payload BLOB NOT NULL,updated_at INTEGER NOT NULL);
+ CREATE TABLE IF NOT EXISTS sg_shaper_actions(id TEXT PRIMARY KEY,node_id TEXT NOT NULL,user_id TEXT NOT NULL,status TEXT NOT NULL,created_at INTEGER NOT NULL,expires_at INTEGER NOT NULL,payload BLOB NOT NULL,report BLOB);
+ CREATE INDEX IF NOT EXISTS sg_shaper_node_user ON sg_shaper_actions(node_id,user_id,expires_at);
+ CREATE TABLE IF NOT EXISTS sg_analysis_windows(id TEXT PRIMARY KEY,minute INTEGER NOT NULL,payload BLOB NOT NULL);
+ CREATE INDEX IF NOT EXISTS sg_analysis_windows_time ON sg_analysis_windows(minute);
+ CREATE TABLE IF NOT EXISTS sg_analysis_seen(id TEXT PRIMARY KEY,minute INTEGER NOT NULL);
+ CREATE INDEX IF NOT EXISTS sg_analysis_seen_time ON sg_analysis_seen(minute);
+ CREATE TABLE IF NOT EXISTS sg_incidents(id TEXT PRIMARY KEY,updated_at INTEGER NOT NULL,status TEXT NOT NULL,payload BLOB NOT NULL,review BLOB);
+ CREATE INDEX IF NOT EXISTS sg_incidents_time ON sg_incidents(updated_at DESC);
  CREATE TABLE IF NOT EXISTS sg_snapshots(key TEXT PRIMARY KEY,payload BLOB NOT NULL,stored_at INTEGER NOT NULL);
  CREATE TABLE IF NOT EXISTS sg_activity(id INTEGER PRIMARY KEY AUTOINCREMENT,node_id TEXT NOT NULL,user_id TEXT NOT NULL,timestamp INTEGER NOT NULL,payload BLOB NOT NULL);
  CREATE INDEX IF NOT EXISTS sg_activity_user ON sg_activity(user_id,timestamp DESC);
@@ -256,6 +252,9 @@ func (s *Server) routes() {
 	r.Group(func(r chi.Router) {
 		r.Use(s.agentAuth)
 		r.Post("/api/v1/agents/heartbeat", s.heartbeat)
+		r.Post("/api/v1/agents/monitor", s.monitorReport)
+		r.Get("/api/v1/agents/shaper", s.shaperCommands)
+		r.Put("/api/v1/agents/shaper-results", s.shaperResults)
 		r.Post("/api/v1/agents/telemetry", s.telemetry)
 		r.Get("/api/v1/agents/health-targets", s.agentHealthTargets)
 		r.Put("/api/v1/agents/health-results", s.agentHealthResults)
@@ -286,6 +285,13 @@ func (s *Server) routes() {
 		r.Delete("/agents/{id}", s.revokeAgent)
 		r.Get("/settings", s.settings)
 		r.Get("/audit", s.auditList)
+		r.Get("/incidents", s.incidents)
+		r.Put("/incidents/{id}/review", s.reviewIncident)
+		r.Get("/analysis/policy", s.getAnalysisPolicy)
+		r.Put("/analysis/policy", s.putAnalysisPolicy)
+		r.Get("/analysis/shaper", s.listShaper)
+		r.Get("/analysis/monitor", s.listMonitor)
+		r.Delete("/analysis/shaper/{id}", s.cancelShaper)
 		r.Get("/ipintel/lookup", s.lookup)
 		r.Post("/ipintel/reload", s.reloadIntel)
 		r.Get("/backups", s.backups)
@@ -299,7 +305,7 @@ func (s *Server) routes() {
 		r.Get("/youtube", s.youtubeStatus)
 		r.Post("/youtube/check", s.youtubeCheck)
 		r.Post("/notifications/test", s.notificationTest)
-		for _, kind := range []string{"tiers", "policies", "pins", "geo-rules", "alerts"} {
+		for _, kind := range []string{"alerts"} {
 			kind := kind
 			r.Get("/"+kind, func(w http.ResponseWriter, r *http.Request) { s.listObjects(w, r, kind) })
 			r.Put("/"+kind+"/{id}", func(w http.ResponseWriter, r *http.Request) { s.putObject(w, r, kind) })
@@ -307,55 +313,6 @@ func (s *Server) routes() {
 		}
 	})
 	r.Post(s.config.Panel.WebhookPath, s.webhook)
-	sub := func(w http.ResponseWriter, r *http.Request) {
-		if s.config.Demo {
-			w.Header().Set("X-SubGate-Demo", "true")
-			w.Header().Set("Content-Type", "text/plain")
-			_, _ = io.WriteString(w, "vless://00000000-0000-4000-8000-000000000000@demo.invalid:443?security=tls&type=tcp#SubGate%20Demo\n")
-			return
-		}
-		shortUUID := chi.URLParam(r, "shortUuid")
-		if s.antiscan != nil {
-			signals, _ := s.antiscan.AnalyzeRequest(s.clientIP(r), shortUUID, r.UserAgent())
-			for _, signal := range signals {
-				if signal.EscalationLevel >= antiscan.LevelDeny {
-					if s.metricErrors != nil {
-						s.metricErrors.Inc()
-					}
-					http.Error(w, "access denied", http.StatusForbidden)
-					return
-				}
-			}
-			if tarpitted, remaining := s.antiscan.ShouldTarpit(s.clientIP(r)); tarpitted {
-				delay := remaining
-				if delay > 500*time.Millisecond {
-					delay = 500 * time.Millisecond
-				}
-				timer := time.NewTimer(delay)
-				select {
-				case <-timer.C:
-				case <-r.Context().Done():
-					timer.Stop()
-					return
-				}
-			}
-		}
-		if s.geoDenied(r) {
-			http.Error(w, "access denied", 403)
-			return
-		}
-		r.SetPathValue("shortUuid", shortUUID)
-		r.SetPathValue("clientType", chi.URLParam(r, "clientType"))
-		s.gateway.HandleRequest(w, r)
-	}
-	r.Get("/sub/{shortUuid}", sub)
-	r.Head("/sub/{shortUuid}", sub)
-	r.Get("/sub/{shortUuid}/{clientType}", sub)
-	r.Head("/sub/{shortUuid}/{clientType}", sub)
-	r.Get("/{shortUuid}", sub)
-	r.Head("/{shortUuid}", sub)
-	r.Get("/{shortUuid}/{clientType}", sub)
-	r.Head("/{shortUuid}/{clientType}", sub)
 	assets, _ := fs.Sub(web.Assets, ".")
 	files := http.FileServer(http.FS(assets))
 	r.Get("/", files.ServeHTTP)
@@ -444,33 +401,3 @@ func (s *Server) decrypt(raw []byte, aad string) ([]byte, error) {
 	}
 	return nil, fmt.Errorf("storage integrity/key verification failed")
 }
-func (s *Server) Load(key string) (gateway.CacheEntry, error) {
-	var raw []byte
-	var e gateway.CacheEntry
-	err := s.db.QueryRow("SELECT payload FROM sg_snapshots WHERE key=?", key).Scan(&raw)
-	if err != nil {
-		return e, err
-	}
-	raw, err = s.decrypt(raw, key)
-	if err == nil {
-		err = json.Unmarshal(raw, &e)
-	}
-	return e, err
-}
-func (s *Server) Save(key string, e gateway.CacheEntry) error {
-	raw, err := json.Marshal(e)
-	if err != nil {
-		return err
-	}
-	raw, err = s.encrypt(raw, key)
-	if err != nil {
-		return err
-	}
-	_, err = s.db.Exec("INSERT INTO sg_snapshots(key,payload,stored_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET payload=excluded.payload,stored_at=excluded.stored_at", key, raw, e.StoredAt.Unix())
-	return err
-}
-func (s *Server) Delete(key string) error {
-	_, err := s.db.Exec("DELETE FROM sg_snapshots WHERE key=?", key)
-	return err
-}
-func (s *Server) Clear() error { _, err := s.db.Exec("DELETE FROM sg_snapshots"); return err }

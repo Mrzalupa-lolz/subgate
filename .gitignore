@@ -1,5 +1,6 @@
 # Go
 bin/
+agent/native/subgate-ndpi
 dist/
 *.exe
 *.exe~

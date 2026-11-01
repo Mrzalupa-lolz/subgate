@@ -15,7 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/subgate/subgate/core/internal/gateway"
 	"github.com/subgate/subgate/core/internal/panel"
 )
 
@@ -80,10 +79,10 @@ func TestPanelSyncCommitsCompleteSnapshotAndPreservesLastGood(t *testing.T) {
 	}
 }
 
-func TestWebhookHMACReplayAndSnapshotInvalidation(t *testing.T) {
+func TestWebhookHMACReplayPreservesLegacyStorage(t *testing.T) {
 	s := newTestServer(t)
 	s.config.Panel.WebhookKey = "webhook-test-secret"
-	entry := gateway.CacheEntry{Data: []byte("private subscription snapshot"), StoredAt: time.Now(), ExpiresAt: time.Now().Add(time.Minute)}
+	entry := legacySnapshot{Data: []byte("private subscription snapshot"), StoredAt: time.Now(), ExpiresAt: time.Now().Add(time.Minute)}
 	if err := s.Save("snapshot-id", entry); err != nil {
 		t.Fatal(err)
 	}
@@ -107,8 +106,8 @@ func TestWebhookHMACReplayAndSnapshotInvalidation(t *testing.T) {
 	if w := call(body, signature); w.Code != 202 {
 		t.Fatalf("signed webhook: %d %s", w.Code, w.Body)
 	}
-	if _, err := s.Load("snapshot-id"); err == nil {
-		t.Fatal("webhook did not invalidate persisted subscription")
+	if _, err := s.Load("snapshot-id"); err != nil {
+		t.Fatal("webhook changed retired storage")
 	}
 	if w := call(body, signature); w.Code != 200 || !strings.Contains(w.Body.String(), `"duplicate":true`) {
 		t.Fatalf("webhook replay: %d %s", w.Code, w.Body)

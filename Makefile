@@ -4,7 +4,7 @@ BIN_DIR ?= bin
 IMAGE_PREFIX ?= subgate
 LDFLAGS := -s -w -X main.version=$(VERSION)
 
-.PHONY: help build build-core build-agent test test-race vet lint check smoke demo docker bench clean
+.PHONY: help build build-core build-agent build-worker build-ndpi test test-race vet lint check smoke demo docker bench clean
 
 help:
 	@echo "build  Build Core and Agent"
@@ -17,6 +17,11 @@ build-core:
 build-agent:
 	@mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 $(GO) build -trimpath -ldflags '$(LDFLAGS)' -o $(BIN_DIR)/subgate-agent ./agent/cmd
+build-worker:
+	@mkdir -p $(BIN_DIR)
+	CGO_ENABLED=0 $(GO) build -trimpath -o $(BIN_DIR)/subgate-worker ./agent/worker
+build-ndpi:
+	$(MAKE) -C agent/native
 test:
 	$(GO) test ./...
 test-race:

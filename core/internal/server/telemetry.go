@@ -230,6 +230,10 @@ func (s *Server) telemetry(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if err = s.analyzeTelemetry(tx, input, now); err != nil {
+		fail(w, 500, "analysis persistence failed")
+		return
+	}
 	if err = tx.Commit(); err != nil {
 		fail(w, 500, "ingest commit failed")
 		return

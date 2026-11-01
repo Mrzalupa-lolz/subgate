@@ -1,5 +1,5 @@
-# Безопасность, geo и anti-abuse
-О чём: owner auth, client IP, geo gate, anti-scan, protection и сигнализация F21.
+# Безопасность и выявление подозрительной активности
+О чём: owner auth, client IP, мониторинг запросов и сигнализация F21.
 Когда читать: auth, пользовательский ввод, сетевые ограничения или сигналы злоупотреблений.
 
 ## Инварианты
@@ -23,29 +23,22 @@ Enrollment/manual-sync/quota success audit и mutation атомарны; panel o
 Storage key rollover после restart: один active32-byte key + до8 previous read keys, regular private files без symlink/FIFO.
 Новые ciphertext active, старые readable previous; автоматического re-encrypt/retirement нет. Key loss делает данные невосстановимыми.
 
-## Client IP и geo gate
-Код: server/clientip.go, server/api.go:geoDenied; geoblock utility не доказывает runtime функций.
-Trusted direct peer/proxy chain и v4mapped normalization есть; spoofed forwarded chain тестирован.
-CDN real-IP только от проверенных диапазонов, IPv6 /64 grouping и CGNAT hints ещё нет.
-Runtime geo CRUD поддерживает country/ASN/CIDR/network_type, first match по stored order, low-confidence country не deny.
-Unknown allow/deny/grace, user exemption, policy scope, curated priority и 403/404/decoy/empty modes ещё не подключены полностью.
-При неизвестном IP нужны явные semantics, IPv6 tests и rate-limited masked denied-request logs.
-Политика намеренного geo deny отличается от аварийного fail-open; не возвращать пустую подписку из-за ошибок.
+## Наблюдения Xray и решения
 
-## Anti-scan и node protection
-Код: antiscan/antiscan.go, server/server.go. Enumeration/rate/UA signals и deny подключены.
-AnalyzeRequest не активирует ApplyTarpit: наличие ShouldTarpit не доказывает работающую escalation.
-Node handshake corpus/signals, /24+ASN+UA correlation, configurable allowlists, firewall export и отдельный TG topic отсутствуют.
-Не кодировать handshake строки по памяти; нужен реальный очищенный golden corpus; не блокировать клиентов только за curl/wget без согласованной политики.
-F23: собственные nft tables/sets, никогда flush ruleset; strict/open/skip, ban-once, flag-drop/anti-spoof,
-SYN/UDP/connection limits, Hysteria2/TUIC bulk ports, auto-detect node ports, panel/Core/SSH whitelist, ctguard,
-threat lists, fleet sync, CrowdSec/UFW integration где уместно, safety timer/dry-run/rollback/anti-lockout.
-Текущих nft runtime/plans/tests нет; сначала generate-only план и отказ трогать чужие правила.
+Код: `core/internal/analysis/window.go`, `core/internal/server/analysis.go`, `telemetry.go`; интерфейс — «Разбор аномалий» и «Правила анализа».
 
-## F21 и опциональный F25
-Семь анализаторов temporal, geo/impossible-travel, ASN, behaviour, devices, HWID, UA не реализованы.
-Нужны explainable evidence/thresholds, scoring, dedupe, delayed re-check, CGNAT buffer/agglomerations и P2P reports.
-По D01 только сигналы: auto-ban/disable/speed penalty по обвинению запрещены.
-F25 eBPF EDT shaper optional; независимое включение требует B05 и не может обходить запрет автоматических санкций.
-Глобальная SSRF защита всех operator URLs не доказана: block-check ограничен synced targets, YouTube allowlist проверяется на каждом redirect.
-Нужны URL policy для feeds/webhooks/editor docs, secret redaction, TLS/path/backup review, signed artifacts/SBOM/vulnerability gates.
+`GET /api/v1/incidents` выдаёт объяснимые наблюдения: частоту уникальных записей Xray, число IP назначения и число портов одного назначения. `PUT /incidents/{id}/review` сохраняет решение и заметку владельца. `GET/PUT /analysis/policy` управляют порогами и проектом shaper. Доступ — только owner, изменения — с CSRF; чтение наблюдений и решения журналируются. Payload наблюдений, окон и заметок зашифрован. Аналитика коммитится вместе с телеметрией; retries не увеличивают счётчики. Состояние разбора сохраняется при новых измерениях.
+
+Это наблюдения, не автоматический вердикт. Большой расход, общий IP и P2P отдельно не доказывают нарушение. Сканирование/исходящие атаки требуют контекста, повторных подтверждений и уверенной атрибуции. Пропуски данных и насыщение агрегатов должны быть видны оператору.
+
+Новый requestmonitor и API request-signals убраны вместе с gateway: запросы подписок обслуживает middleware. Geo deny и geo-rules также не исполняются. F23 внешний node protection не входит в SubGate.
+
+## F25 — временное ограничение подтверждённых нарушителей
+
+Вернул в план владелец 2026-11-01. Цель — автоматическое временное ограничение при высокой уверенности, иначе ручной разбор. Значения лимита и срока пока не выбраны, исполнитель eBPF/TC не реализован. Проект настройки не применяет ограничений. Нужны TTL на ноде, автоматическое снятие при потере Core, allowlist, audit, idempotency и подтверждение применения.
+
+## Глубокий анализ
+
+Реализован отдельный nDPI-коллектор: классификация/счётчики без содержимого трафика, сброс прав после открытия capture, поддержка nDPI 4.14/4.2. Для санкции нужны эксклюзивные выделенные интерфейсы канонического аккаунта, два разных достоверных потока одного выбранного протокола в двух минутах, длительная перегрузка и независимые счётчики Xray. Общий IP, cache/port guesses и потери запрещают автоматическое решение. Неизвестное/зашифрованное содержимое остаётся неизвестным; две производные одного лога не считаются независимыми. Условия, режим атрибуции и ограничения: [NODE_MONITORING.md](../NODE_MONITORING.md).
+
+Текущие окна/границы и этапы: [PROJECT_PLAN](../PROJECT_PLAN.md). Глобальная SSRF-защита operator URLs не доказана: block-check ограничен synced targets, YouTube allowlist проверяется на каждом redirect.

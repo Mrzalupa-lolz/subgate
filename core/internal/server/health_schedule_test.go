@@ -105,6 +105,9 @@ func TestScheduledHealthTransitions(t *testing.T) {
 func TestScheduledHealthUnknownCancellationAndAtomicFailure(t *testing.T) {
 	s := newTestServer(t)
 	unknown := panel.Node{ID: "unknown", IPAddress: "127.0.0.1", Inbounds: []panel.Inbound{{Port: 443, Network: "quic"}}}
+	if err := s.saveObject("nodes", unknown.ID, unknown); err != nil {
+		t.Fatal(err)
+	}
 	if err := s.scheduledNodeProbe(context.Background(), unknown); err != nil {
 		t.Fatal(err)
 	}
@@ -130,6 +133,9 @@ func TestScheduledHealthUnknownCancellationAndAtomicFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	failed := panel.Node{ID: "unknown", IPAddress: "127.0.0.1", Inbounds: []panel.Inbound{{Port: 1, Network: "tcp"}}}
+	if err := s.saveObject("nodes", failed.ID, failed); err != nil {
+		t.Fatal(err)
+	}
 	if err := s.scheduledNodeProbe(context.Background(), failed); err == nil {
 		t.Fatal("persistence failure ignored")
 	}
@@ -178,6 +184,9 @@ func TestScheduledHealthIncompleteEndpointsCannotQuarantine(t *testing.T) {
 	_, goodPort, _ := net.SplitHostPort(good.Addr().String())
 	p2, _ := strconv.Atoi(goodPort)
 	n := panel.Node{ID: "partial", IPAddress: "127.0.0.1", Inbounds: []panel.Inbound{{Port: p1, Network: "tcp", Security: "tls"}, {Port: p2, Network: "tcp"}}}
+	if err := s.saveObject("nodes", n.ID, n); err != nil {
+		t.Fatal(err)
+	}
 	for i := 0; i < 4; i++ {
 		if err := s.scheduledNodeProbe(context.Background(), n); err != nil {
 			t.Fatal(err)

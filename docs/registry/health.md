@@ -1,6 +1,8 @@
+> Актуальное уточнение 2026-11-01: четыре оставшихся health/maintenance FAIL исправлены в synthetic fixtures; полный suite прошёл. Описания FAIL ниже — история аудита. Health не влияет на подписки.
+
 # Health engine и quarantine
-О чём: scheduler, quorum, maintenance, persisted health и применение к подпискам.
-Когда читать: health transitions, Agent votes, quarantine/recovery и tier exclusions.
+О чём: scheduler, quorum, maintenance, persisted health и состояние мониторинга нод.
+Когда читать: health transitions, Agent votes, quarantine/recovery и расписание проб.
 
 ## Реализация и текущая проверка
 Код: core/internal/server/health_schedule.go, health_quorum.go, health_maintenance.go; core/internal/health/.
@@ -10,13 +12,10 @@ N/M defaults3/2, диапазон1..1000; min quarantine1m, backoff30s..15m capp
 Границы backoff/min hold отсчитываются после slow probe/commit decision.
 Первый успех переводит quarantined в recovering; исключение сохраняется до M consecutive successes + min hold.
 Неудача recovery сбрасывает successes и возвращает quarantine.
-Routing читает committed snapshot под lock; rolled-back transition не должен менять подписку.
+Мониторинг и расписание Agent читают committed snapshot под lock; rolled-back transition не должен менять опубликованное состояние.
 
-ВАЖНО: текущий suite FAIL, B04. Пять tests, включая maintenance/slow probe/incomplete cases, получают sql: no rows in result set.
-Исторический PASS2026-10-14 не отменяет текущую регрессию; health в целом PARTIAL.
-TestScheduledHealthTransitions, TestProbeQuorum и TestQuarantineFiltersSubscription в текущем запуске PASS.
-Точные результаты и отсутствие полного race gate — [REORG_REPORT](../REORG_REPORT.md).
-Repair/re-run этих пяти regression cases — первая техническая задача плана.
+История аудита: в прежнем baseline B04 тесты maintenance/slow probe/incomplete получали `sql: no rows in result set`; подробности сохранены в [REORG_REPORT](../REORG_REPORT.md). Этот результат относится к предыдущему состоянию.
+В правке 2026-11-01 исправлены synthetic fixtures: проверяемые ноды теперь присутствуют в synced registry. Полный Linux go test ./... прошёл; текущие проверки — [MONITORING_VALIDATION](../MONITORING_VALIDATION.md).
 
 ## Quorum и Agent
 health.quorum1..64, default1. Core даёт одно verified observation; каждый authenticated enrolled Agent — максимум один vote/target.
@@ -33,16 +32,12 @@ Partial cycle отправляет completed probes под отдельным5s 
 До128 YAML windows с node_id/from/until, from<until, RFC3339, интервалы [from,until), overlaps union.
 Restart применяет настройки. Во время maintenance Core no-dial, manual probe409, Agent targets omit node.
 Любой overlap полного observation с window должен игнорироваться; counters/state сохраняются.
-После окончания probes возобновляются; maintenance само по себе не удаляет node из подписки.
-Эти правила определены кодом/tests, но текущие failing regressions требуют исправления до DONE.
+После окончания probes возобновляются; maintenance сохраняет наблюдаемое состояние и подавляет новые проверки.
+Текущий synthetic suite проверяет эти правила; live transport acceptance остаётся отдельным gate.
 
-## Gateway consumers
-Quarantined/recovering pins и tier members пропускаются, выбирается eligible fallback.
-Без политики исключаются только однозначно mapped endpoints. Unknown formats/protocols и ambiguous addresses сохраняются.
-При unsafe transform/exhausted tiers выдаются exact upstream bytes; cache hit заново применяет health.
-Это fail-open, не доказательство полной политики critical/recovery alert или quota fallback.
-Нет manual force-quarantine/healthy workflow, transition critical/recovery producers, log-derived health, full process checks.
-Min-healthy, N/M/quorum и fallback тестировать fake clock/fixtures; не использовать production failure injection.
+## Потребители состояния
+
+После удаления gateway health/quarantine остаются внутренними состояниями мониторинга и расписания проб. Они не меняют подписки и не выполняют санкций. Нет manual force-quarantine/healthy workflow, transition critical/recovery producers, log-derived health и full process checks.
 
 ## Пробы
 Reachability уровни, HTTP/3 и unknown defaults вынесены в [transports](transports.md).

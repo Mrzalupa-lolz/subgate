@@ -85,6 +85,9 @@ func TestMaintenanceSuppression(t *testing.T) {
 	// Other nodes remain probed and window is [from,until), not indefinite.
 	other := n
 	other.ID = "other"
+	if err := s.saveObject("nodes", other.ID, other); err != nil {
+		t.Fatal(err)
+	}
 	if err := s.scheduledNodeProbe(context.Background(), other); err != nil {
 		t.Fatal(err)
 	}
@@ -169,6 +172,9 @@ func TestMaintenanceSuppressesWindowEntirelyInsideSlowProbe(t *testing.T) {
 	host, p, _ := net.SplitHostPort(l.Addr().String())
 	port, _ := strconv.Atoi(p)
 	n := panel.Node{ID: "spanning", IPAddress: host, Inbounds: []panel.Inbound{{Port: port, Network: "tcp", Security: "tls"}}}
+	if err := s.saveObject("nodes", n.ID, n); err != nil {
+		t.Fatal(err)
+	}
 	now := time.Now()
 	s.config.Health.MaintenanceWindows = []config.MaintenanceWindow{{NodeID: n.ID, From: now.Add(50 * time.Millisecond), Until: now.Add(150 * time.Millisecond)}}
 	if err := s.scheduledNodeProbe(context.Background(), n); err != nil {

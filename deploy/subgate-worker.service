@@ -1,0 +1,31 @@
+[Unit]
+Description=SubGate optional nDPI and TC node worker
+After=network-online.target
+Wants=network-online.target subgate-worker-expire.timer
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/usr/local/bin/subgate-worker -config /etc/subgate/worker.json
+ExecStopPost=/usr/local/bin/subgate-worker -config /etc/subgate/worker.json -cleanup
+Restart=on-failure
+RestartSec=5
+StateDirectory=subgate-worker
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/subgate-worker
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK AF_PACKET
+CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN CAP_SETUID CAP_SETGID
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

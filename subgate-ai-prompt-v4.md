@@ -1,8 +1,14 @@
 # PROMPT v4: Build "SubGate" — the single-pane control plane for Remnawave
 
+> Scope 2026-11-01 (latest owner clarification): SubGate automates Remnawave/Xray traffic monitoring, explainable anomaly review and temporary shaping of high-confidence confirmed offenders. Subscription serving/HTTP subscription monitoring/user administration belong to middleware. External DDoS/firewall (F23) excluded. F25 restored; owner will choose rate/TTL later. Optional metadata-only nDPI collector approved. P2P or high usage alone never authorizes sanctions. Current implementation and gaps: docs/PROJECT_PLAN.md.
+
 > Working name: `subgate` (rename freely). Paste the whole document to the AI coding agent and feed it **phase by phase** (section 19). This version supersedes v1–v3.
 
 ---
+
+## Historical reference
+
+The detailed v4 sections below contain superseded subscription features and speculative capacities. They are retained for traceability, not instructions to rebuild them. For current scope, priorities, UI and acceptance use docs/PROJECT_PLAN.md and docs/MONITORING_VALIDATION.md. Do not implement F1–F5 subscription paths, Users/pins pages or HTTP subscription monitoring from this historical text.
 
 ## 0. Role and mission
 
@@ -13,7 +19,7 @@ You are a principal-level engineer (Go, Linux networking, Xray-core, observabili
 3. **real-time per-user bandwidth**, per second;
 4. **IP intelligence**: a precise "who is connecting from where" layer (ASN, operator type, country, city) used everywhere;
 5. **universal protocol support**, a **full Xray log pipeline** (all levels, including `debug`) and a **user activity journal** — where each user went, viewable for any moment in time, stored compactly;
-6. **protection** (anti-scan, geo-block, drop detection) and an **operations console** with notifications.
+6. **traffic monitoring and investigation** (request anomalies, IP origins, drop detection) and an **operations console** with notifications.
 
 The operator must not need Grafana, Prometheus, Redis, PostgreSQL, a separate bot, or ten scattered scripts. **Everything is built in.** Integrations with Remnawave and `remnawave-admin` are first-class, but SubGate must be fully useful without `remnawave-admin`.
 
@@ -37,7 +43,7 @@ PANEL_VERSION=<<verify>>  CLIENT_APPS=<<FILL>>  SUB_FORMATS=<<FILL>>  USERS=<<FI
 
 ## 3. Platform, language and stack
 
-**Platform: Linux only** (amd64 + arm64; kernel ≥ 5.10; systemd). No Windows/macOS code paths, no portability shims — use Linux-native facilities freely (inotify, netlink, nftables, journald, epoll, optional eBPF). Build tags `linux`. Developers may build on other OSes only via containers.
+**Platform: Linux only** (amd64 + arm64; kernel ≥ 5.10; systemd). No Windows/macOS code paths, no portability shims — use Linux-native facilities freely (inotify, netlink, journald, epoll). Build tags `linux`. Developers may build on other OSes only via containers.
 
 **Language: Go (1.24+) for Core and Agent.** Record in `docs/adr/0001-language.md`:
 - The workload is I/O-bound with huge concurrency *and* CPU-heavy inner loops (per-second parsing of tens of thousands of counters, log-line parsing at up to 100k lines/s, JSON rewriting for thousands of subscription requests/s). Go handles both with goroutines, a low-latency GC and single static binaries.
@@ -100,7 +106,7 @@ Per-user live counters come from Xray's gRPC `StatsService`; logs come from Xray
  Node Agents (outbound-only) ──► per-second user stats, Xray logs, health, region checks
  Probe Agents in the censorship region ──► reachability + "16–20" block checks
 ```
-Core = gateway + panel sync + health + policy/tier/pin engine + quotas + IP-intel + TSDB + log analytics + anti-scan + notifier + bot + admin API + console + agent registry/distribution + backups + updater. Agent/Probe = same binary (`subgate agent|probe`). Deployment modes: **A) behind an existing reverse proxy** (recommended, with fail-open fallback) and **B) standalone with built-in ACME**. The panel API token lives **only on Core**; agents use their own revocable tokens.
+Core = gateway + panel sync + health + policy/tier/pin engine + quotas + IP-intel + TSDB + log analytics + request observations + notifier + bot + admin API + console + agent registry/distribution + backups + updater. Agent/Probe = same binary (`subgate agent|probe`). Deployment modes: **A) behind an existing reverse proxy** (recommended, with fail-open fallback) and **B) standalone with built-in ACME**. The panel API token lives **only on Core**; agents use their own revocable tokens.
 
 ## 6. Universal protocol and transport support (hard requirement)
 
@@ -119,7 +125,7 @@ SubGate must work **stably with every protocol, transport and security mode Xray
 
 **Data layers (Core downloads and refreshes them itself; verify current URLs, formats and licences in P0):**
 1. **L1 – origin ASN from BGP (authoritative for ASN, fresh for newly announced prefixes):** IPtoASN (public-domain PDDL data, daily) and/or tables derived from RIPE RIS / RouteViews; optionally the BGP.tools table (requires a compliant User-Agent; check its terms).
-2. **L2 – registration country from RIR delegation files** (`delegated-extended` from RIPE NCC, ARIN, APNIC, LACNIC, AFRINIC; public, daily). Covers **newly allocated blocks** that geolocation databases don't know yet — this closes the "new territories" gap for geo-block.
+2. **L2 – registration country from RIR delegation files** (`delegated-extended` from RIPE NCC, ARIN, APNIC, LACNIC, AFRINIC; public, daily). Covers **newly allocated blocks** that geolocation databases don't know yet — this closes the "new territories" gap for IP-origin analytics.
 3. **L3 – geolocation:** **DB-IP Lite** City + ASN (CC BY 4.0, monthly; **a visible link-back "IP Geolocation by DB-IP" is mandatory on pages displaying its results**), **IPinfo Lite** (free token, country + ASN, daily; the publisher's resource page cites CC BY-SA 4.0 — verify share-alike implications before redistributing any derived file), optional **MaxMind GeoLite2** City/ASN (free account + licence key, EULA, twice-weekly updates). Support any MMDB v2 file the operator supplies.
 4. **L4 – network type classification:** seed from public datasets (e.g. `ipverse/as-metadata` categories, Stanford **ASdb** research dataset — latest snapshot 2026-03 — BGP.tools tags, PeeringDB) **plus operator-curated overrides in the UI**. Public datasets lump mobile carriers into `isp`, so **the mobile-operator list must be curated**: ship seed lists for the key countries (RU first; major mobile operators resolved by organisation name through RIR/BGP data, each marked `needs review`). Heuristics (AS name contains mobile/LTE/GSM/cellular, CGNAT density = many distinct users per IP, reverse-DNS patterns) produce **suggestions only**, never auto-applied.
 
@@ -129,7 +135,7 @@ SubGate must work **stably with every protocol, transport and security mode Xray
 
 **Client-IP quality rules:** trusted-proxy chain only; IPv4-mapped IPv6 normalisation; IPv6 grouped by /64 for per-user logic; **CDN-fronted traffic** (XHTTP via CDN) shows CDN IPs — detect CDN ASNs and use configured real-IP headers (`CF-Connecting-IP` etc.) only from trusted CDN ranges, else mark "via CDN"; show **CGNAT hints** (many users per IP).
 
-**Uses:** geo-block (F7), policy conditions/tiers (F3: ASN class, operator, country), subscriber map (F8), per-user location history, anti-scan (F12), **connection-origin analytics from node logs (F19)**, optional impossible-travel / sharing hints (suggestions only).
+**Uses:** IP-origin analysis (F7), policy conditions/tiers (F3: ASN class, operator, country), subscriber map (F8), per-user location history, request observations (F12), **connection-origin analytics from node logs (F19)**, optional impossible-travel / sharing hints (suggestions only).
 
 **Interfaces:** `GET /api/v1/ipintel/lookup?ip=` (+ bulk), CLI `subgate ipintel lookup <ip>`, UI page "IP intelligence" with a lookup box, source/licence/build-date panel, curated-ASN editor (tags, import/export CSV).
 
@@ -167,8 +173,8 @@ SubGate must work **stably with every protocol, transport and security mode Xray
 ### F6 — Per-node traffic quotas
 - Quota = (node, scope) × bytes × period (day/week/month, calendar or rolling, time zone). Source: panel per-user/per-node usage with fallback to agent accounting (F16). Over quota ⇒ node removed from **that user's** next subscription; warnings at 80/90 %. Document that enforcement happens at refresh time.
 
-### F7 — Geo-block
-- Country/ASN/**network-type**/CIDR rules, allow/deny, per-policy scope, per-user exemptions, curated overrides. **Unknown-IP behaviour configurable** (allow/deny/grace); thanks to L1+L2 (section 7) newly allocated ranges are still classified. Block response configurable (403, 404-mimic, empty subscription, decoy). IPv6 supported. Blocked-request logging rate-limited.
+### F7 — IP-origin analysis
+- Country/ASN/network-type/CIDR are context for investigation, not access restrictions. Unknown IPs remain unknown; no geo deny or decoy responses.
 
 ### F8 — "Who is where": maps and per-user origins
 - Two views: (a) **subscription-request origins** and (b) **connection origins from node access logs (F19)** — the latter is the accurate one. Aggregations by country/city/ASN/operator/network type over time, CGNAT hints, per-user history (last N distinct ASN/country/city with timestamps), filters by operator.
@@ -183,24 +189,24 @@ SubGate must work **stably with every protocol, transport and security mode Xray
 ### F11 — YouTube region scan
 - Every N hours per node the agent determines the region YouTube sees for the node egress (locale/consent handled; no API keys). If it becomes a forbidden region (default `RU`): dedicated alert, stop re-checking that node until reset/cooldown, optional policy action.
 
-### F12 — Anti-scan
-- Sources: gateway request log (masked identifiers) **and node log signals (F19)**. Detectors: invalid-`shortUuid` enumeration, rate anomalies, scanner/headless UAs, odd paths, cross-IP patterns, **invalid/failed handshake bursts on inbounds** (collect real log samples in P0; do not hard-code strings from memory), grouped by IP/subnet/**ASN/network type**.
-- Escalating actions: tarpit/decoy → in-app deny → export to reverse proxy / node firewall via agent → alert in a **separate Telegram topic** with correlation (earlier requests from same IP, /24, ASN+UA fingerprint, first/last seen, top paths). Allowlists; optional public-blocklist import.
+### F12 — Internal Xray anomaly observations (scope 2026-11-01)
+- Analyze internal VPN connection logs and node telemetry; HTTP subscription requests belong entirely to middleware.
+- Show measurements, thresholds, time windows, source quality and context for review. High usage, P2P and many connections alone do not establish abuse.
+- Future high-confidence major violations may trigger temporary shaper F25 after exact attribution, repeated independent confirmation and owner-selected rate/TTL. Other cases go to owner review. External DDoS/firewall protection remains excluded.
 
 ### F13 — Web console, settings, updates
-- Pages: **Live**, Dashboard, Nodes & mapping, Users & pins, Policies & tiers, Injections, Quotas, **IP intelligence**, Geo & maps, Blocks matrix, **Logs**, **User activity (F20)**, Alerts, Anti-scan, Operations, Backups, Settings, Audit, System.
+- Pages: **Live**, Dashboard, Nodes & mapping, Users & pins, Policies & tiers, Injections, Quotas, **IP intelligence**, Geo & maps, Blocks matrix, **Logs**, **User activity (F20)**, Alerts, Request observations, Operations, Backups, Settings, Audit, System.
 - All runtime settings in a **versioned config store** with validation, atomic hot-reload and rollback.
 - Auth: local admins + mandatory TOTP, optional WebAuthn, roles `superadmin/admin/viewer` with **no privilege escalation**, HttpOnly cookies + CSRF, login rate-limit/lockout, API keys.
 - **First-run wizard:** admin bootstrap → panel URL + token test → node discovery → IP-intel sources (keys) → Telegram → "Add node" (generates the agent install command).
 - **One-click update:** signed releases, minimal-privilege updater (no raw Docker socket in the main container), previous version kept for rollback, DB backup before migrations.
 
 ### F14 — Notifications and Telegram bot
-- Built-in bot with per-category topics (health, drops, youtube, 16-20, anti-scan, bandwidth, logs, system), webhooks, optional email. Severity, dedupe, cooldown, quiet hours, recovery messages, test button, RU/EN templates, proxy support. Commands (allow-listed Telegram IDs only): `/status`, `/node`, `/user`, `/top`, `/ip <addr>` (IP-intel lookup), quarantine/ban buttons.
+- Built-in bot with per-category topics (health, drops, youtube, 16-20, request observations, bandwidth, logs, system), webhooks, optional email. Severity, dedupe, cooldown, quiet hours, recovery messages, test button, RU/EN templates, proxy support. Commands (allow-listed Telegram IDs only): `/status`, `/node`, `/user`, `/top`, `/ip <addr>` (IP-intel lookup), investigation links.
 
 ### F15 — Agent and Probe
 - Enrollment via one-time token from the UI; install one-liner served by Core, version-pinned, checksum **and signature** verified; systemd unit; outbound-only; batching, back-off, replay protection, clock-skew tolerance; revocable per-agent tokens; optional auto-update.
 - Telemetry: heartbeat, CPU/RAM/disk, NIC throughput/drops, conntrack, TCP retransmits, Xray/remnanode state (read-only, least privilege, **no Docker socket**), per-user stats (F16), logs (F19).
-- Optional plugins (off by default): ingest reports from installed diagnostic tools; blocklist loader using **own nft set names** (never flush the ruleset) with dry-run, **anti-lockout safety timer**, automatic whitelist of the current SSH client and Core/panel IPs.
 
 ### F16 — Real-time per-user bandwidth ("who uses how much speed this very second")
 - **Source:** Xray `StatsService` per-user uplink/downlink counters (`user>>>{email}>>>traffic>>>uplink|downlink`), sampled by the Agent; where a protocol has no per-user counters, inbound-level fallback (section 6). Fallback of last resort (labelled "coarse"): panel bandwidth-stats API.
@@ -351,9 +357,9 @@ Billing, sales bot, replacing the Remnawave panel UI, re-implementing `remnawave
 Repositories (study; do not copy code):
 - https://github.com/DigneZzZ/remnawave-scripts — panel/node lifecycle scripts, backups, Selfsteal, WARP/Tor
 - https://github.com/legiz-ru/my-remnawave — subscription-page configs, client templates, response rules
-- https://github.com/dotX12/traffic-guard — ipset/iptables scanner blocking (Go)
-- https://github.com/jestivald/node-accelerator — nftables protection, ban-once logic, JSON diagnostics
-- https://github.com/Case211/node-diagnostic — node diagnostics with JSON output, shaper, reachability checks
+- https://github.com/dotX12/traffic-guard — reference only; firewall features excluded
+- https://github.com/jestivald/node-accelerator — reference only; protection features excluded
+- https://github.com/Case211/node-diagnostic — node diagnostics with JSON output and reachability checks
 - https://github.com/saveksme/multitest — wrapper around region/DPI/IP-quality tools
 - https://github.com/oximeter-cloud/xray-monitor — central collector + edge agents pattern
 - https://github.com/DonMatteoVPN/Reshala-Remnawave-Bedolaga — fleet-management ideas only
@@ -370,7 +376,7 @@ Repositories (study; do not copy code):
 - **P1 – Gateway MVP + design prototype:** F1, panel client (ogen), webhooks, node mapping, auth + minimal console, wizard skeleton, fail-open + fallback configs, **IP-intel builder/lookup (section 7)**, the static HTML/CSS/JS prototype (section 9).
 - **P2 – Live core:** agent enrollment, **F16 end-to-end**, built-in TSDB, Live page, **F19 log pipeline** with connection origins, **F20 capture, coalescing, hot-tier segment store and basic timeline API**.
 - **P3 – Fleet logic:** F2, F3, F4, F14, universal protocol corpus tests in CI.
-- **P4 – Control & protection:** F5, F6, F7, F8, F10, F11, F12, F17, F18, **F20 tiered compaction, disk budget, full Activity UI, exports, purge**, `remnawave-admin` connector, mihomo + sing-box adapters, F9 + probe.
+- **P4 – Monitoring & investigation:** F5, F6, F7, F8, F10, F11, F12, F17, F18, **F20 tiered compaction, disk budget, full Activity UI, exports, purge**, `remnawave-admin` connector, mihomo + sing-box adapters, F9 + probe.
 - **P5 – Hardening & release:** load/chaos tests, threat model, updater, signed releases, docs, benchmark report.
 
 ## 20. Working method (rules for you)

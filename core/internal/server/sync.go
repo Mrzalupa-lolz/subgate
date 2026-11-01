@@ -67,7 +67,6 @@ func (s *Server) syncPanelWithAudit(ctx context.Context, audit func(*sql.Tx) err
 	s.syncMu.Unlock()
 	nodes, err := s.panel.ListNodesContext(ctx)
 	users := []panel.User{}
-	var hosts []panel.Host
 	if err == nil {
 		for offset := 0; ; {
 			page, total, e := s.panel.ListUsersContext(ctx, offset, 1000)
@@ -91,13 +90,6 @@ func (s *Server) syncPanelWithAudit(ctx context.Context, audit func(*sql.Tx) err
 		}
 	}
 	if err == nil {
-		if result, e := s.panel.ListHostsContext(ctx); e == nil {
-			hosts = result
-		} else {
-			s.logger.Warn("host mapping unavailable; node address matching only", "error", e)
-		}
-	}
-	if err == nil {
 		s.syncMu.Lock()
 		defer s.syncMu.Unlock()
 		if revision != s.syncRevision {
@@ -110,7 +102,7 @@ func (s *Server) syncPanelWithAudit(ctx context.Context, audit func(*sql.Tx) err
 			defer s.db.TxUnlock()
 			defer tx.Rollback()
 			// A complete snapshot is committed atomically; failed fetches keep the last-good view.
-			_, err = tx.Exec("DELETE FROM sg_objects WHERE kind IN ('nodes','users','hosts')")
+			_, err = tx.Exec("DELETE FROM sg_objects WHERE kind IN ('nodes','users')")
 			for _, n := range nodes {
 				if err != nil {
 					break
@@ -127,13 +119,6 @@ func (s *Server) syncPanelWithAudit(ctx context.Context, audit func(*sql.Tx) err
 				}
 				raw, _ := json.Marshal(u)
 				_, err = tx.Exec("INSERT INTO sg_objects(kind,id,data,updated_at) VALUES('users',?,?,?)", u.ID, string(raw), time.Now().Unix())
-			}
-			for _, h := range hosts {
-				if err != nil {
-					break
-				}
-				raw, _ := json.Marshal(h)
-				_, err = tx.Exec("INSERT INTO sg_objects(kind,id,data,updated_at) VALUES('hosts',?,?,?)", h.ID, string(raw), time.Now().Unix())
 			}
 			if err == nil {
 				// Global watermark also covers users removed or absent in the full
@@ -190,8 +175,10 @@ func (s *Server) background() {
 			_, _ = s.db.Exec("DELETE FROM sg_sessions WHERE expires_at<?", time.Now().Unix())
 			_, _ = s.db.Exec("DELETE FROM sg_enrollment WHERE expires_at<?", time.Now().Unix())
 			_, _ = s.db.Exec("DELETE FROM sg_webhooks WHERE timestamp<?", time.Now().Add(-24*time.Hour).Unix())
-			_, _ = s.db.Exec("DELETE FROM sg_snapshots WHERE stored_at<?", time.Now().Add(-5*time.Minute).Unix())
 			_, _ = s.db.Exec("DELETE FROM sg_speed WHERE timestamp<?", time.Now().Add(-24*time.Hour).UnixMilli())
+			_, _ = s.db.Exec("DELETE FROM sg_analysis_windows WHERE minute<?", time.Now().Add(-3*time.Minute).Unix()/60)
+			_, _ = s.db.Exec("DELETE FROM sg_analysis_seen WHERE minute<?", time.Now().Add(-3*time.Minute).Unix()/60)
+			_, _ = s.db.Exec("DELETE FROM sg_incidents WHERE updated_at<?", time.Now().Add(-14*24*time.Hour).Unix())
 			ttl := s.config.Storage.ActivityJournal.HotTTL
 			if ttl <= 0 {
 				ttl = 14 * 24 * time.Hour
@@ -208,16 +195,6 @@ func (s *Server) syncHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		fail(w, 502, "panel sync failed")
-		return
-	}
-	if err := s.gateway.Clear(); err != nil {
-		// The snapshot and success outcome are committed. Surface a separate
-		// cache failure instead of claiming the snapshot transaction failed.
-		if auditErr := s.recordAudit(r, &p, "panel.sync.cache", "panel", "", "failure"); auditErr != nil {
-			fail(w, 500, "audit unavailable")
-			return
-		}
-		fail(w, 500, "cache invalidation failed")
 		return
 	}
 	writeJSON(w, 200, map[string]bool{"ok": true})
@@ -304,15 +281,6 @@ func (s *Server) webhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.syncRevision++
-	if err = s.gateway.Clear(); err != nil {
-		// The user upsert is idempotent; allow panel retry if persistent cache
-		// invalidation failed after committing it.
-		_, _ = s.db.Exec("DELETE FROM sg_webhooks WHERE key=?", key)
-		fail(w, 500, "cache invalidation failed")
-		return
-	}
-	// Unimplemented event types only invalidate cache, retaining reconciliation
-	// as the fallback. No user fields are inferred from their payloads.
 	writeJSON(w, 202, map[string]bool{"accepted": true})
 }
 

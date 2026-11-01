@@ -1,0 +1,117 @@
+// Package requestmonitor records suspicious subscription activity for manual review.
+package requestmonitor
+
+import (
+	"sort"
+	"strings"
+	"sync"
+	"time"
+)
+
+const maxIPs = 2000
+
+// Signal describes evidence, never an instruction to restrict a client.
+type Signal struct {
+	Type          string    `json:"type"`
+	SourceIP      string    `json:"source_ip"`
+	Count         int       `json:"count"`
+	Threshold     int       `json:"threshold"`
+	WindowSeconds int       `json:"window_seconds"`
+	Evidence      string    `json:"evidence,omitempty"`
+	FirstSeen     time.Time `json:"first_seen"`
+	LastSeen      time.Time `json:"last_seen"`
+}
+
+type activity struct {
+	start    time.Time
+	last     time.Time
+	requests int
+	uuids    map[string]struct{}
+	signals  map[string]Signal
+}
+
+type Monitor struct {
+	mu  sync.Mutex
+	ips map[string]*activity
+}
+
+func New() *Monitor { return &Monitor{ips: make(map[string]*activity)} }
+
+// Observe uses a one-minute window per IP. It stores neither UUIDs in reports
+// nor raw User-Agent strings. Memory is bounded; oldest IPs are evicted at capacity.
+func (m *Monitor) Observe(ip, uuid, ua string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	now := time.Now()
+	a := m.ips[ip]
+	if a == nil {
+		if len(m.ips) >= maxIPs {
+			var oldest string
+			var at time.Time
+			for key, value := range m.ips {
+				if at.IsZero() || value.last.Before(at) {
+					oldest, at = key, value.last
+				}
+			}
+			delete(m.ips, oldest)
+		}
+		a = &activity{signals: make(map[string]Signal)}
+		m.ips[ip] = a
+	}
+	if now.Sub(a.start) >= time.Minute {
+		a.start, a.requests, a.uuids = now, 0, make(map[string]struct{})
+	}
+	a.last = now
+	a.requests++
+	if uuid != "" && len(uuid) <= 128 && len(a.uuids) < 51 {
+		a.uuids[uuid] = struct{}{}
+	}
+	record := func(kind string, count, threshold int) {
+		signal := a.signals[kind]
+		if signal.FirstSeen.IsZero() {
+			signal.FirstSeen = now
+		}
+		signal.Type, signal.SourceIP = kind, ip
+		signal.Count, signal.Threshold, signal.WindowSeconds = count, threshold, 60
+		signal.LastSeen = now
+		a.signals[kind] = signal
+	}
+	if len(a.uuids) > 50 {
+		record("uuid_enumeration", len(a.uuids), 50)
+	}
+	if a.requests > 100 {
+		record("request_rate", a.requests, 100)
+	}
+	// General clients such as curl, wget and Go/Python libraries are not evidence.
+	for _, pattern := range []string{"sqlmap", "nikto", "nmap", "masscan", "nessus"} {
+		if strings.Contains(strings.ToLower(ua), pattern) {
+			record("scanner_user_agent", 1, 0)
+			signal := a.signals["scanner_user_agent"]
+			signal.Evidence = pattern
+			a.signals["scanner_user_agent"] = signal
+			break
+		}
+	}
+}
+
+// Signals returns recent evidence by value. Reports expire after 24 hours and
+// are lost on restart; the persistent Xray activity journal is separate.
+func (m *Monitor) Signals() []Signal {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	result := []Signal{}
+	cutoff := time.Now().Add(-24 * time.Hour)
+	for ip, a := range m.ips {
+		if a.last.Before(cutoff) {
+			delete(m.ips, ip)
+			continue
+		}
+		for _, signal := range a.signals {
+			if !signal.LastSeen.Before(cutoff) {
+				result = append(result, signal)
+			}
+		}
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].LastSeen.After(result[j].LastSeen) })
+	return result
+}

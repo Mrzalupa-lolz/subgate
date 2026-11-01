@@ -1,0 +1,18 @@
+[Unit]
+Description=Expire SubGate TC leases independently of Core and the node worker
+After=network.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/local/bin/subgate-worker -config /etc/subgate/worker.json -expire-only
+StateDirectory=subgate-worker
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/subgate-worker
+CapabilityBoundingSet=CAP_NET_ADMIN
+RestrictAddressFamilies=AF_NETLINK AF_UNIX
+TimeoutStartSec=15

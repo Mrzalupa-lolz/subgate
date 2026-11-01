@@ -6,54 +6,14 @@ server {
     ssl_certificate /etc/letsencrypt/live/subgate.example.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/subgate.example.com/privkey.pem;
     client_max_body_size 2m;
-    # On Core failure, panel remains authoritative; Core policy checks are bypassed.
-    # Replace subscriptions.example.com with the public subscription origin.
-    # Only the /sub/... route can bypass a failed Core; console/API cannot.
-    location ~ "^/sub/[A-Za-z0-9_-]{1,128}(?:/[A-Za-z0-9_-]{1,128})?$" {
-        limit_except GET HEAD { deny all; }
-        access_log off;
-        error_log /dev/null crit;
-        proxy_pass http://127.0.0.1:8080;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header Proxy-Authorization "";
-        proxy_set_header Proxy-Connection "";
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_connect_timeout 1s;
-        proxy_read_timeout 15s;
-        proxy_intercept_errors on;
-        error_page 502 503 504 = @panel_subscription;
-    }
-    location @panel_subscription {
-        # break keeps the original query and method (including HEAD).
-        rewrite ^/sub/(.*)$ /api/sub/$1 break;
-        proxy_pass https://subscriptions.example.com;
-        proxy_http_version 1.1;
-        proxy_ssl_server_name on;
-        proxy_ssl_verify on;
-        proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
-        proxy_set_header Host subscriptions.example.com;
-        proxy_set_header Authorization "";
-        proxy_set_header Cookie "";
-        proxy_set_header Proxy-Authorization "";
-        proxy_set_header Proxy-Connection "";
-        access_log off;
-        error_log /dev/null crit;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_connect_timeout 3s;
-        proxy_read_timeout 15s;
-        add_header Cache-Control "no-store" always;
-        add_header X-SubGate-Fallback "panel" always;
-    }
     location / {
         proxy_pass http://127.0.0.1:8080;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_read_timeout 35s;
+        proxy_buffering off; # SSE live stream
+        proxy_read_timeout 60s;
         proxy_send_timeout 35s;
     }
 }

@@ -11,18 +11,20 @@
 [QUESTIONS.md](QUESTIONS.md) — только неотвеченные продуктовые вопросы — зависимый scope.
 [ENVIRONMENT.md](ENVIRONMENT.md) — test host/ресурсы/границы — перед Linux/Docker checks.
 [middleware-integration.md](middleware-integration.md) — распределение функций с PHP middleware и архив отключённого кода.
+[PROJECT_PLAN.md](PROJECT_PLAN.md) — актуальный план автоматизации мониторинга, nDPI и shaper.
+[NODE_MONITORING.md](NODE_MONITORING.md) — подключение Linux worker, nDPI, выделенные пути аккаунтов, TC/TBF и TTL watchdog.
 [api.md](api.md) — существующий Core HTTP/wire API — вызов/правка endpoint.
 [remnawave-api-summary.md](remnawave-api-summary.md) — нужные panel methods/paths/fields — Reader/action/editor.
 [panel-contract.md](panel-contract.md) — scopes/3.4.5/ogen projection — nullable/enum/drift/token access.
 [registry/panel-ui.md](registry/panel-ui.md) — panel/sync/UI/wizard/PWA — F13/F14/#11/#33/#36.
 [registry/nodes-fleet.md](registry/nodes-fleet.md) — Agent/spool/install/fleet/optimizer — F15/F24/F26/#22/#26/#34.
-[registry/security.md](registry/security.md) — owner/CSRF/geo/anti-scan/abuse/protection — F7/F12/F21/F23/F25/#18/#20/#25.
+[registry/security.md](registry/security.md) — owner/CSRF/IP/наблюдения и сигналы — F12/F21; F23 исключён, F25 возвращён в план.
 [registry/health.md](registry/health.md) — scheduler/quorum/maintenance/quarantine/B04 — F2/#3.
 [registry/transports.md](registry/transports.md) — generic/WS/gRPC/XHTTP/H3/REALITY/editor — F27/#27; для текстового Xray-редактора.
 [registry/telemetry.md](registry/telemetry.md) — speed/TSDB/drops/regional/YouTube/metrics — F9–F11/F16/F24/F35/#15/#23/#24/#29.
 [registry/activity.md](registry/activity.md) — log pipeline/journal/segments/retention/query — F19/F20/#16.
 [registry/ip-origins.md](registry/ip-origins.md) — L1–L5/MMDB/ASN/origins/maps — F8/§7/#21.
-[registry/gateway-routing.md](registry/gateway-routing.md) — fail-open/cache/tiers/pins/mirror/relay — F1/F1a/F3/F4/F32/#1/#2/#3/#17.
+[registry/gateway-routing.md](registry/gateway-routing.md) — архив переданного middleware контура подписок — F1/F1a/F3/F4/F32/#1/#2/#3/#17.
 [registry/subscription.md](registry/subscription.md) — quotas и переданные middleware функции подписки — F5/F6/F29–F31/#4–#10/#13.
 [registry/ops.md](registry/ops.md) — actions/Telegram/backup/restore/automation/support/plugins — F14/F17/F18/F22/F33/F36/#12/#19/#28/#30–#32/#35.
 [registry/quality.md](registry/quality.md) — DONE/commands/budgets/CI/load/chaos/context — acceptance/release.

@@ -20,16 +20,9 @@ Activity reads (`activity.read`) and exports (`activity.export`) record final su
 | GET | `/version` | Code version (0.2.0) and demo flag |
 | GET | `/metrics` | Public text metrics exporter |
 | GET | `/`, `/console` | Embedded console |
-| GET/HEAD | `/sub/{shortUuid}` or `/sub/{shortUuid}/{clientType}` | Subscription response |
-| GET/HEAD | `/{shortUuid}` or `/{shortUuid}/{clientType}` | Legacy subscription aliases |
 | POST | `/api/v1/auth/login` | Login |
 | POST | `/api/v1/agents/enroll` | Consume one-time enrollment token |
-| POST | `/webhook/panel` | Optional signed invalidation webhook; YAML can change path |
-
-GET/HEAD aliases сохраняют method/raw query и Accept-Language/UA/HWID/X-Ver-Os/X-Device-* metadata; credentials/hop headers исключены.
-HEAD не запускает body transforms; response announce/announce-url сохраняются. Exact cache variant и fail-open scope: [gateway-routing](registry/gateway-routing.md).
-
-Subscription responses expose `X-Cache-Status: hit`, `miss`, or `stale`; stale responses also carry an HTTP Warning. The origin body is preserved unless an applicable mapped policy transforms it. `X-SubGate-Policy` describes policy, passthrough or bypass handling. Unknown representations and endpoints with ambiguous node mappings are retained. Cache identity includes request query, client and device headers. Upstream 4xx responses are authoritative and remove the matching snapshot.
+| POST | `/webhook/panel` | Optional signed synchronization webhook; YAML can change path |
 
 ## Authenticated administrative endpoints
 
@@ -37,7 +30,7 @@ Subscription responses expose `X-Cache-Status: hit`, `miss`, or `stale`; stale r
 |---|---|---|
 | GET | `/auth/me` | Current principal |
 | POST | `/auth/logout` | End session |
-| GET | `/system/status` | Counts, last sync/error, database/cache/intelligence status; `panel_version` (`expected`, `actual`, `state`: not_checked/compatible/mismatch/unavailable) |
+| GET | `/system/status` | Counts, last sync/error, database/intelligence status; `panel_version` (`expected`, `actual`, `state`: not_checked/compatible/mismatch/unavailable) |
 | GET | `/nodes`, `/users` | `q`, `offset`, `limit` (default 500, max 1000) |
 | GET | `/nodes/{id}`, `/users/{id}` | Cached object by panel UUID |
 | POST | `/nodes/{id}/actions/{action}` | enable, disable, restart, reset-traffic |
@@ -56,6 +49,12 @@ Subscription responses expose `X-Cache-Status: hit`, `miss`, or `stale`; stale r
 | POST | `/agents/enrollment-tokens` | `{"node_id":"PANEL_NODE_UUID"}`; expires in 15 minutes |
 | DELETE | `/agents/{id}` | Revoke node Agent token |
 | GET | `/settings` | Effective non-secret configuration |
+| GET | `/incidents` | Owner-only Xray observations; limit default 200, max 500; encrypted evidence, audited read; 14-day retention |
+| PUT | `/incidents/{id}/review` | status: reviewing/confirmed/false_positive/resolved; note up to 2000 bytes; atomic audit, no network action |
+| GET/PUT | `/analysis/policy` | Xray thresholds, overload/recovery windows, automatic_shaper, shaper_mbps, shaper_minutes, restricted_protocols, allowlist; 0 limit/TTL means unset and prevents automation |
+| GET | `/analysis/monitor` | Audited node collector quality, capacity, baseline, finalized load window and last report |
+| GET | `/analysis/shaper` | Audited encrypted action/result history, pending/applied/failed/cancelled/removed/expired |
+| DELETE | `/analysis/shaper/{id}` | Audited cancellation; node confirms actual removal on reconciliation |
 | GET | `/audit` | `limit` (default 100, max 1000) |
 | GET | `/ipintel/lookup` | `ip=...`; unloaded addresses remain unknown |
 | POST | `/ipintel/reload` | Reload the configured local dataset atomically; keep the last good dataset if validation fails |
@@ -72,7 +71,7 @@ GET `/quotas` lists quota rules; PUT/DELETE require `/quotas/{id}`. Settings hav
 
 ### Features delegated to middleware
 
-The injection API (`/injections`, `/injections/{id}`) and user action API (`POST /users/{id}/actions/{action}`) are no longer registered. Authenticated requests return 404. Existing injection data stays in SQLite and is ignored. Users remain readable for routing, pins and telemetry; node actions remain available.
+The injection API (`/injections`, `/injections/{id}`) and user action API (`POST /users/{id}/actions/{action}`) are no longer registered. Authenticated requests return 404. Existing injection data stays in SQLite and is ignored. Users remain readable for telemetry identity lookup; node actions remain available. Subscription routes, request-signals, tiers/policies/pins are also unregistered and return 404. No subscription upstream is configured.
 
 Original implementation, tests and documentation: [archive](../_archive/middleware-overlap-2026-10-31/README.md). See [ownership and integration](middleware-integration.md). PHP middleware has different configuration formats; this change does not migrate saved rules or deploy middleware.
 
@@ -82,7 +81,7 @@ List responses normally use `{"data":[],"total":N,"offset":0}` for object lists 
 
 ## Quotas
 
-`GET /quotas`, `PUT /quotas/{id}`, and `DELETE /quotas/{id}` manage `node_id`, `scope` (`per_user` or `per_node`), `user_id` for per-user rules, positive `limit_bytes`, optional nonnegative `grace_bytes`, `period` (`day`, `week`, `month`, or `rolling`; defaults to month), optional IANA `timezone` (UTC by default), and `enabled`. Rolling means the preceding 30 days; calendar weeks begin on Monday. A PUT returns the normalized rule and server-generated `updated_at`. Rule mutations and their audit records commit atomically. Quota checks use committed telemetry in SQLite, survive Core restarts and duplicate batch replay, and fail open when usage storage cannot be read. Per-node rules include inbound fallback counters when user counters are unavailable; overlapping inbound intervals are suppressed where user observations provide a more specific measurement. When the selected node is exhausted, the gateway retains the original subscription and reports `X-SubGate-Policy: quota-exhausted`. This is a routing decision, not a data-plane traffic cutoff.
+`GET /quotas`, `PUT /quotas/{id}`, and `DELETE /quotas/{id}` manage `node_id`, `scope` (`per_user` or `per_node`), `user_id` for per-user rules, positive `limit_bytes`, optional nonnegative `grace_bytes`, `period` (`day`, `week`, `month`, or `rolling`; defaults to month), optional IANA `timezone` (UTC by default), and `enabled`. Rolling means the preceding 30 days; calendar weeks begin on Monday. A PUT returns the normalized rule and server-generated `updated_at`. Rule mutations and their audit records commit atomically. Quota checks use committed telemetry in SQLite, survive Core restarts and duplicate batch replay, and fail open when usage storage cannot be read. Per-node rules include inbound fallback counters when user counters are unavailable; overlapping inbound intervals are suppressed where user observations provide a more specific measurement. Quota accounting does not alter subscriptions or cut off data-plane traffic.
 
 `POST /nodes/{id}/block-check` accepts an optional synced inbound `port` (443 by default), optional `address` matching the synchronized node IP, and `tls`/`server_name`. Unknown nodes return 404, nodes without synced endpoints return 409, and mismatched targets return 400. The check runs from Core and is audited before network activity. `GET /blocks` lists saved results.
 
@@ -90,36 +89,17 @@ List responses normally use `{"data":[],"total":N,"offset":0}` for object lists 
 
 Compatibility tightening: block checks no longer accept arbitrary addresses or unsynced ports, and the YouTube API no longer accepts arbitrary mirror URLs. The standalone YouTube utility can still use a mirror in trusted code. Quota rules now reject unknown timezones and integer overflow. Existing authentication, error envelopes, and endpoint paths are retained.
 
-## Policies, tiers, pins and geo rules
+## Xray observations and review
 
-Each of `tiers`, `policies`, `pins`, `geo-rules`, and `alerts` supports `GET /{kind}`, `PUT /{kind}/{id}`, and `DELETE /{kind}/{id}`. PUT replaces the JSON object and forces its `id` from the path. Create referenced tiers before policies; pins must reference synced users/nodes.
+`GET /incidents` returns `data`, `window_seconds:60`, `retention_days:14`. Each item includes id/node_id/user_id/kind/value/threshold/target/first_seen/last_seen/truncated/status/note/reviewed_at. Xray kinds: connection_rate, destination_breadth, port_breadth. Additional kinds: dpi_protocol (classification/quality/version in target), sustained_overload (capacity utilization in value, load/baseline/CPU in target). Node-only/unattributed observations have an empty user_id. Delayed Xray events older than 2 minutes stay in the journal without generating current observations. Review state survives subsequent evidence updates.
 
-```json
-{
-  "name": "Europe",
-  "enabled": true,
-  "strategy": "leastLoad",
-  "min_healthy": 1,
-  "node_ids": ["NODE_UUID"],
-  "fallback_tier_id": ""
-}
-```
+Xray defaults are 3000 records/min, 128 ports per destination/min, 512 destination IPs/min. Max 8192 distinct records and port sets for 128 destinations; saturation is explicit via truncated. Identical repacked log records are deduplicated. Aggregates and observations commit with telemetry and survive restart. Xray thresholds alone never create a shaper command.
 
-Tier strategies are `random`, `roundRobin`, `leastPing`, and `leastLoad`. Eligible nodes have status `online` and no committed quarantine or recovery exclusion; `leastPing` requires a recorded successful probe. A fallback must reference an existing tier and cannot form a cycle.
+`GET /analysis/policy` wraps the policy, reports shaper_available:true and dpi_available:true (implemented capabilities, not connected collector health), and automatic_actions equal to policy.automatic_shaper. PUT takes the policy object directly. Defaults: overload_percent=85, recovery_percent=70, sustained_minutes=3, automatic_shaper=false, shaper_mbps=0, shaper_minutes=0, empty restricted_protocols and allowlist. Recovery must be below overload; sustained_minutes ranges 2–60, shaper_minutes 0–1440, shaper_mbps 0–100000. Enabling automation requires positive limit/TTL and at least one exact nDPI protocol name. Confirmation of an incident only saves review state.
 
-```json
-{
-  "name": "Default routing",
-  "enabled": true,
-  "priority": 10,
-  "tier_id": "europe",
-  "conditions": {"countries": [], "asns": [], "user_agent": ""}
-}
-```
+The optional node worker uses agent bearer authentication: `POST /api/v1/agents/monitor` takes wire.MonitorReport (resources, leased exclusive bindings, bounded flow metadata, collector_error); `GET /api/v1/agents/shaper` returns the authoritative desired action list plus server_time; `PUT /api/v1/agents/shaper-results` takes an array of wire.ShaperResult, scoped to the authenticated node. Reports are encrypted with existing storage keys and action mutations commit with audit. Monitor batches allow at most 2000 bindings/flows, resource intervals 1–15 seconds and resource timestamps within 30 seconds in the past/5 seconds in the future; flows are limited to the preceding 5 minutes. Identical resource timestamps and flow IDs do not create repeated confirmations. No payload field is accepted. Full setup, attribution constraints, decision requirements and TTL semantics: [NODE_MONITORING.md](NODE_MONITORING.md); exact JSON types: [wire/monitor.go](../pkg/wire/monitor.go).
 
-Policies are evaluated by ascending priority. A valid enabled user pin (`{"user_id":"UUID","node_id":"UUID","enabled":true}`) takes precedence. Country/ASN conditions use Core's client IP. Behind a proxy, configure explicit trusted proxy CIDRs before applying subscriber address rules. Unmapped endpoint entries are preserved to avoid corrupting unsupported protocols.
-
-Geo rules use `name`, `enabled`, `rule_type` (`country`, `asn`, `cidr`, `network_type`), `action` (`allow`, `deny`), and a nonempty string `values` array. The first matching rule in stored object order determines the decision; CIDR and operator-supplied intelligence rules are supported. Country matching requires intelligence stronger than `low` confidence.
+Only `alerts` retains generic GET/PUT/DELETE object APIs. Subscription policies/tiers/pins and geo-rules are retired; retained SQLite rows are ignored.
 
 ## Agent contract
 
@@ -146,9 +126,11 @@ PUT /api/v1/agents/health-results принимает max64 результато�
 oversize fleet health-targets503. Свежесть90s/future5s, legacy completed_at использует receive time.
 Core принимает только votes, применимые к текущему target; legacy TCP failures не дают quorum для H3-only.
 Точные optional wire fields: [wire.go](../pkg/wire/wire.go).
-Текущий suite имеет5health FAIL, см. [BLOCKED](BLOCKED.md#b04-воспроизводимые-тесты).
+Исторические health fixture failures исправлены; текущие проверки — [MONITORING_VALIDATION](MONITORING_VALIDATION.md).
 
 Storage rollover: storage.encryption_key_file/SUBGATE_STORAGE_KEY_FILE и previous_encryption_key_files/
 SUBGATE_PREVIOUS_STORAGE_KEY_FILES (до8previous), restart required. Regular private32raw-byte key, no symlink/FIFO.
 Старые данные не re-encrypt автоматически; restore принимает original backup key.
 Retention/activity policy: [activity](registry/activity.md); audit/key safety: [security](registry/security.md).
+
+Geo-rule endpoints and subscription denial by geography or scanner signals were removed on 2026-11-01. Existing stored geo rules remain inert. IP intelligence and Xray activity monitoring remain available.

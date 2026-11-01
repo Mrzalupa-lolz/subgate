@@ -1,0 +1,11 @@
+[Unit]
+Description=SubGate independent TC expiry watchdog
+
+[Timer]
+OnBootSec=1s
+OnUnitActiveSec=5s
+AccuracySec=1s
+Unit=subgate-worker-expire.service
+
+[Install]
+WantedBy=timers.target

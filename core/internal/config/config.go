@@ -83,15 +83,14 @@ type DatabaseConfig struct {
 // PanelConfig holds Remnawave panel integration settings
 type PanelConfig struct {
 	// Writes are disabled unless explicitly enabled for a writable panel.
-	AllowWrites     bool          `yaml:"allow_writes"`
-	URL             string        `yaml:"url"`
-	APIToken        string        `yaml:"api_token"`
-	Timeout         time.Duration `yaml:"timeout" default:"30s"`
-	MaxRetries      int           `yaml:"max_retries" default:"3"`
-	WebhookPath     string        `yaml:"webhook_path" default:"/webhook/panel"`
-	WebhookKey      string        `yaml:"webhook_key"`
-	SubscriptionURL string        `yaml:"subscription_url"`
-	SyncInterval    time.Duration `yaml:"sync_interval"`
+	AllowWrites  bool          `yaml:"allow_writes"`
+	URL          string        `yaml:"url"`
+	APIToken     string        `yaml:"api_token"`
+	Timeout      time.Duration `yaml:"timeout" default:"30s"`
+	MaxRetries   int           `yaml:"max_retries" default:"3"`
+	WebhookPath  string        `yaml:"webhook_path" default:"/webhook/panel"`
+	WebhookKey   string        `yaml:"webhook_key"`
+	SyncInterval time.Duration `yaml:"sync_interval"`
 }
 
 // IPIntelConfig holds IP intelligence settings
@@ -222,9 +221,8 @@ func LoadFromEnv() (*Config, error) {
 			BackupPath:     getEnv("SUBGATE_BACKUP_PATH", "data/backups"),
 		},
 		Panel: PanelConfig{
-			URL:             getEnv("SUBGATE_PANEL_URL", ""),
-			APIToken:        getEnv("SUBGATE_PANEL_TOKEN", ""),
-			SubscriptionURL: getEnv("SUBGATE_SUBSCRIPTION_URL", ""),
+			URL:      getEnv("SUBGATE_PANEL_URL", ""),
+			APIToken: getEnv("SUBGATE_PANEL_TOKEN", ""),
 		},
 		Auth: AuthConfig{
 			JWTSecret:     getEnv("SUBGATE_JWT_SECRET", ""),
@@ -311,7 +309,7 @@ func (c *Config) Validate() error {
 	if c.Auth.JWTSecret != "" && len(c.Auth.JWTSecret) < 32 {
 		return fmt.Errorf("JWT secret must be at least 32 characters")
 	}
-	for _, raw := range []string{c.Panel.URL, c.Panel.SubscriptionURL} {
+	for _, raw := range []string{c.Panel.URL} {
 		if raw == "" {
 			continue
 		}

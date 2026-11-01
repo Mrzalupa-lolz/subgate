@@ -4,9 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net"
-	"net/http/httptest"
 	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/subgate/subgate/core/internal/panel"
@@ -65,21 +63,7 @@ func TestUnknownProtocolGenericHandling(t *testing.T) {
 			t.Fatal("unverifiable probe caused quarantine", state)
 		}
 	}
-	// Unknown protocol entries still participate by address without any rewrite
-	// of their opaque parameters.
-	if err := s.saveObject("users", "generic-user", panel.User{ID: "generic-user", ShortUUID: "generic-short", Status: "active"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.saveObject("pins", "generic-pin", map[string]any{"user_id": "generic-user", "node_id": n.ID, "enabled": true}); err != nil {
-		t.Fatal(err)
-	}
-	request := httptest.NewRequest("GET", "http://console.test/sub/generic-short", nil)
-	request.SetPathValue("shortUuid", "generic-short")
-	raw := []byte("never-seen-protocol://synthetic@" + host + ":" + strconv.Itoa(port) + "?opaque=future#keep\n")
-	out, _, err := s.transformSubscription(request, raw, nil)
-	if err != nil || string(out) != string(raw) || !strings.Contains(string(out), "opaque=future") {
-		t.Fatal("unknown subscription changed", err)
-	}
+
 }
 
 func TestManualUnknownEndpointPreventsFalseNodeFailure(t *testing.T) {

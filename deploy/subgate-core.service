@@ -1,5 +1,5 @@
 [Unit]
-Description=SubGate subscription gateway and console
+Description=SubGate traffic monitoring and Xray analysis
 After=network-online.target
 Wants=network-online.target
 

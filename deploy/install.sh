@@ -90,7 +90,6 @@ if ((want_core)); then
       write_setting SUBGATE_BACKUP_PATH /var/lib/subgate/backups
       write_setting SUBGATE_PANEL_URL "${SUBGATE_PANEL_URL:-https://panel.example.com}"
       write_setting SUBGATE_PANEL_TOKEN "${SUBGATE_PANEL_TOKEN:-replace-with-a-scoped-remnawave-api-token}"
-      write_setting SUBGATE_SUBSCRIPTION_URL "${SUBGATE_SUBSCRIPTION_URL:-}"
       write_setting SUBGATE_PUBLIC_URL "${SUBGATE_PUBLIC_URL:-}"
       write_setting SUBGATE_TRUSTED_PROXIES "${SUBGATE_TRUSTED_PROXIES:-}"
       write_setting SUBGATE_ADMIN_USERNAME "${SUBGATE_ADMIN_USERNAME:-admin}"

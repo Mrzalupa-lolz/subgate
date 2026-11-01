@@ -9,7 +9,7 @@ Core — самостоятельный продукт, панель остаё�
 Из OpenAPI 3.4.5 используется generated users response decoder ogen1.24.0; HTTP и остальные readers ручные.
 Нормализация исходных bytes сохраняет int64 counters и UUID precedence; full zero-reflection не достигнут.
 Request не следует redirect, читает envelope response, ограничивает ответ 16 MiB, по умолчанию разрешает только GET.
-Startup GET recap сравнивает версию с generated.SpecVersion, timeout3s; mismatch/unavailable видны в system/status и не останавливают подписки.
+Startup GET recap сравнивает версию с generated.SpecVersion, timeout3s; mismatch/unavailable видны в system/status и не останавливают мониторинг.
 Sync публикует users/nodes/hosts атомарно; при ошибке остаётся last-good. Текущая минута reconciliation соответствует D08.
 HMAC проверяется по raw body; replay marker и user update атомарны, старый webhook/full sync не перезаписывает новые данные.
 Непосредственно применяется user.updated; прочим событиям ещё нужны отдельные projection tests. Fan-out/re-signing отсутствует.
@@ -23,7 +23,7 @@ Scopes из test panel3.4.5 сохранены в panel-contract, не выду�
 Чужие panel passwords Core не хранит; недоступный API должен давать понятную диагностику и deep link.
 
 ## Web UI
-Встроены vanilla JS/CSS/HTML, SSE live, canvas history, поиск users/nodes, Agent enrollment, activity, IP lookup, pins/tiers/policies/geo forms.
+Встроены vanilla JS/CSS/HTML, SSE live, canvas history, поиск нод, Agent enrollment, журнал Xray, IP lookup, очередь разбора и пороги анализа. Вкладка пользователей и формы маршрутизации убраны по поручению владельца.
 Обычный JSON-редактор этих объектов не является Xray-редактором. Его требования находятся в [transports](transports.md).
 Pages/fields проверены чтением web/app.js и Server.routes; node --check проверяет синтаксис, браузерное поведение отдельно не воспроизводилось.
 Нет wizard, versioned settings mutations/rollback, отдельного Logs/live-tail, полной Blocks matrix, origin map и всего operations каталога.

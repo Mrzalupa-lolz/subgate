@@ -1,0 +1,19 @@
+{
+  "core_url": "https://subgate.example.com",
+  "node_id": "REMNAWAVE-NODE-UUID",
+  "token_file": "/var/lib/subgate-agent/token",
+  "collector": "/usr/local/bin/subgate-ndpi",
+  "resource_interface": "eth0",
+  "capacity_mbps": 1000,
+  "allowlist": [],
+  "bindings": [
+    {
+      "user_id": "CANONICAL-REMNAWAVE-ACCOUNT-UUID",
+      "interface": "sg-account1",
+      "shape_interfaces": ["sg-account1", "sg-peer1"],
+      "exclusive": true,
+      "valid_from": "2026-10-31T00:00:00Z",
+      "expires_at": "2026-11-01T00:00:00Z"
+    }
+  ]
+}

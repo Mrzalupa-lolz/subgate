@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/netip"
 	"os"
 	"path/filepath"
 	"sort"
@@ -21,12 +20,13 @@ func (s *Server) systemStatus(w http.ResponseWriter, r *http.Request) {
 	s.stateMu.RLock()
 	last, problem, version := s.lastSync, s.syncError, s.panelVersion
 	s.stateMu.RUnlock()
-	var nodes, users, agents, activity int
+	var nodes, users, agents, activity, incidentsNew int
 	_ = s.db.QueryRow("SELECT COUNT(*) FROM sg_objects WHERE kind='nodes'").Scan(&nodes)
 	_ = s.db.QueryRow("SELECT COUNT(*) FROM sg_objects WHERE kind='users'").Scan(&users)
 	_ = s.db.QueryRow("SELECT COUNT(*) FROM agents WHERE token_hash IS NOT NULL AND last_heartbeat>datetime('now','-90 seconds')").Scan(&agents)
 	_ = s.db.QueryRow("SELECT COUNT(*) FROM sg_activity").Scan(&activity)
-	writeJSON(w, 200, map[string]any{"version": "0.2.0", "demo": s.config.Demo, "uptime_seconds": int(time.Since(s.started).Seconds()), "nodes": nodes, "users": users, "agents_online": agents, "activity_events": activity, "last_sync": last, "sync_error": problem, "panel_version": version, "gateway": s.gateway.Statistics(), "database": s.db.Statistics(), "ipintel": s.intel.Health()})
+	_ = s.db.QueryRow("SELECT COUNT(*) FROM sg_incidents WHERE status='new' AND updated_at>=?", time.Now().Add(-14*24*time.Hour).Unix()).Scan(&incidentsNew)
+	writeJSON(w, 200, map[string]any{"incidents_new": incidentsNew, "version": "0.2.0", "demo": s.config.Demo, "uptime_seconds": int(time.Since(s.started).Seconds()), "nodes": nodes, "users": users, "agents_online": agents, "activity_events": activity, "last_sync": last, "sync_error": problem, "panel_version": version, "database": s.db.Statistics(), "ipintel": s.intel.Health()})
 }
 func limit(r *http.Request, def, max int) int {
 	n, e := strconv.Atoi(r.URL.Query().Get("limit"))
@@ -125,11 +125,10 @@ func (s *Server) nodeAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	_ = s.gateway.Clear()
 	writeJSON(w, 200, map[string]bool{"ok": true})
 }
 func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, 200, map[string]any{"demo": s.config.Demo, "listen": s.config.HTTP.Listen, "panel_url": s.config.Panel.URL, "subscription_url": s.config.Panel.SubscriptionURL, "sync_interval_seconds": s.config.Panel.SyncInterval.Seconds(), "session_timeout_hours": s.config.Auth.SessionTimeout.Hours(), "activity_encrypted": true, "activity_hot_days": 14, "backup_path": s.config.Database.BackupPath, "ipintel_data_path": s.config.IPIntel.DataPath, "protocol_mode": "opaque passthrough", "trusted_proxies": s.config.HTTP.TrustedProxies})
+	writeJSON(w, 200, map[string]any{"demo": s.config.Demo, "listen": s.config.HTTP.Listen, "panel_url": s.config.Panel.URL, "sync_interval_seconds": s.config.Panel.SyncInterval.Seconds(), "session_timeout_hours": s.config.Auth.SessionTimeout.Hours(), "activity_encrypted": true, "activity_hot_days": 14, "backup_path": s.config.Database.BackupPath, "ipintel_data_path": s.config.IPIntel.DataPath, "trusted_proxies": s.config.HTTP.TrustedProxies})
 }
 func (s *Server) auditList(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.db.Query("SELECT id,COALESCE(admin_id,0),action,COALESCE(resource,''),COALESCE(resource_id,''),status,COALESCE(ip_address,''),timestamp,COALESCE(details,'') FROM audit_log ORDER BY id DESC LIMIT ?", limit(r, 100, 1000))
@@ -186,176 +185,16 @@ func (s *Server) putObject(w http.ResponseWriter, r *http.Request, kind string) 
 		fail(w, 500, "save failed")
 		return
 	}
-	_ = s.gateway.Clear()
 	writeJSON(w, 200, input)
 }
 func (s *Server) validateObject(kind string, input map[string]any) error {
-	if enabled, ok := input["enabled"]; ok {
-		if _, valid := enabled.(bool); !valid {
-			return fmt.Errorf("enabled must be a boolean")
-		}
-	}
 	if kind != "alerts" {
-		allowed := map[string]bool{"id": true, "name": true, "enabled": true}
-		for _, key := range map[string][]string{"tiers": {"strategy", "node_ids", "min_healthy", "fallback_tier_id"}, "policies": {"tier_id", "conditions", "priority"}, "pins": {"user_id", "node_id"}, "geo-rules": {"rule_type", "action", "values", "priority"}}[kind] {
-			allowed[key] = true
-		}
-		for key := range input {
-			if !allowed[key] {
-				return fmt.Errorf("unsupported field: %s", key)
-			}
-		}
-	}
-	if kind == "alerts" {
-		return nil
-	}
-	if name, _ := input["name"].(string); kind != "pins" && (name == "" || len(name) > 200) {
-		return fmt.Errorf("name is required (maximum 200 characters)")
-	}
-	if kind == "geo-rules" {
-		rule, _ := input["rule_type"].(string)
-		action, _ := input["action"].(string)
-		if action != "allow" && action != "deny" {
-			return fmt.Errorf("action must be allow or deny")
-		}
-		if rule != "country" && rule != "asn" && rule != "cidr" && rule != "network_type" {
-			return fmt.Errorf("unsupported rule type")
-		}
-		values, ok := input["values"].([]any)
-		if !ok || len(values) == 0 || len(values) > 1000 {
-			return fmt.Errorf("values must be a nonempty array (maximum 1000)")
-		}
-		for _, v := range values {
-			value, ok := v.(string)
-			if !ok {
-				return fmt.Errorf("rule values must be strings")
-			}
-			if rule == "cidr" {
-				if _, err := netip.ParsePrefix(value); err != nil {
-					return fmt.Errorf("invalid CIDR")
-				}
-			}
-			if rule == "asn" {
-				if n, err := strconv.Atoi(value); err != nil || n <= 0 {
-					return fmt.Errorf("invalid ASN")
-				}
-			}
-		}
-		return nil
-	}
-	if kind == "tiers" {
-		if raw, ok := input["node_ids"]; ok {
-			nodes, valid := raw.([]any)
-			if !valid || len(nodes) > 1000 {
-				return fmt.Errorf("node_ids must be an array (maximum 1000)")
-			}
-			seen := map[string]bool{}
-			for _, raw := range nodes {
-				node, valid := raw.(string)
-				if !valid || seen[node] {
-					return fmt.Errorf("node_ids must contain unique node IDs")
-				}
-				seen[node] = true
-				var n panel.Node
-				if s.object("nodes", node, &n) != nil {
-					return fmt.Errorf("unknown node: %s", node)
-				}
-			}
-		}
-		if raw, ok := input["min_healthy"]; ok {
-			n, valid := raw.(float64)
-			if !valid || n < 1 || n > 1000 || n != float64(int(n)) {
-				return fmt.Errorf("min_healthy must be an integer between 1 and 1000")
-			}
-		}
-		strategy, _ := input["strategy"].(string)
-		if strategy != "random" && strategy != "roundRobin" && strategy != "leastPing" && strategy != "leastLoad" {
-			return fmt.Errorf("unsupported balancing strategy")
-		}
-		if fallback, _ := input["fallback_tier_id"].(string); fallback != "" {
-			if fallback == input["id"] {
-				return fmt.Errorf("tier cannot fall back to itself")
-			}
-			visited := map[string]bool{input["id"].(string): true}
-			for fallback != "" {
-				if visited[fallback] {
-					return fmt.Errorf("tier fallback cycle")
-				}
-				visited[fallback] = true
-				var next map[string]any
-				if err := s.object("tiers", fallback, &next); err != nil {
-					return fmt.Errorf("fallback tier does not exist")
-				}
-				fallback, _ = next["fallback_tier_id"].(string)
-			}
-		}
-	}
-	if kind == "policies" {
-		if raw, ok := input["priority"]; ok {
-			n, valid := raw.(float64)
-			if !valid || n < 0 || n > 1000000 || n != float64(int(n)) {
-				return fmt.Errorf("priority must be an integer between 0 and 1000000")
-			}
-		}
-		if raw, ok := input["conditions"]; ok {
-			conditions, valid := raw.(map[string]any)
-			if !valid {
-				return fmt.Errorf("conditions must be an object")
-			}
-			for key, value := range conditions {
-				switch key {
-				case "countries", "asns":
-					list, ok := value.([]any)
-					if !ok || len(list) > 1000 {
-						return fmt.Errorf("%s must be an array", key)
-					}
-					for _, item := range list {
-						if v, ok := item.(string); !ok || v == "" {
-							return fmt.Errorf("%s entries must be strings", key)
-						}
-					}
-				case "user_agent":
-					if _, ok := value.(string); !ok {
-						return fmt.Errorf("user_agent must be a string")
-					}
-				default:
-					return fmt.Errorf("unsupported condition: %s", key)
-				}
-			}
-		}
-		tierID, _ := input["tier_id"].(string)
-		var tier map[string]any
-		if tierID == "" || s.object("tiers", tierID, &tier) != nil {
-			return fmt.Errorf("tier_id must reference an existing tier")
-		}
-	}
-	if kind == "pins" {
-		user, _ := input["user_id"].(string)
-		node, _ := input["node_id"].(string)
-		var raw map[string]any
-		if user == "" || s.object("users", user, &raw) != nil {
-			return fmt.Errorf("user not found")
-		}
-		if node == "" || s.object("nodes", node, &raw) != nil {
-			return fmt.Errorf("node not found")
-		}
+		return fmt.Errorf("unsupported object kind")
 	}
 	return nil
 }
 func (s *Server) deleteObject(w http.ResponseWriter, r *http.Request, kind string) {
 	id := chi.URLParam(r, "id")
-	if kind == "tiers" {
-		var references int
-		err := s.db.QueryRow("SELECT COUNT(*) FROM sg_objects WHERE (kind='policies' AND json_extract(data,'$.tier_id')=?) OR (kind='tiers' AND json_extract(data,'$.fallback_tier_id')=?)", id, id).Scan(&references)
-		if err != nil {
-			fail(w, 500, "reference check failed")
-			return
-		}
-		if references > 0 {
-			fail(w, 409, "tier is referenced by another policy or fallback tier")
-			return
-		}
-	}
 	if err := s.auditAction(r, kind+".delete", kind, id); err != nil {
 		fail(w, 500, "audit unavailable")
 		return
@@ -370,49 +209,7 @@ func (s *Server) deleteObject(w http.ResponseWriter, r *http.Request, kind strin
 		fail(w, 404, "object not found")
 		return
 	}
-	_ = s.gateway.Clear()
 	writeJSON(w, 200, map[string]bool{"ok": true})
-}
-func (s *Server) geoDenied(r *http.Request) bool {
-	rules, err := s.objects("geo-rules")
-	if err != nil {
-		return false
-	}
-	ip := s.clientIP(r)
-	addr, _ := netip.ParseAddr(ip)
-	if addr.IsValid() {
-		addr = addr.Unmap()
-	}
-	intel, _ := s.intel.Lookup(ip)
-	for _, raw := range rules {
-		var rule struct {
-			Enabled bool     `json:"enabled"`
-			Type    string   `json:"rule_type"`
-			Action  string   `json:"action"`
-			Values  []string `json:"values"`
-		}
-		if json.Unmarshal(raw, &rule) != nil || !rule.Enabled {
-			continue
-		}
-		matched := false
-		for _, v := range rule.Values {
-			switch rule.Type {
-			case "cidr":
-				prefix, e := netip.ParsePrefix(v)
-				matched = matched || e == nil && prefix.Contains(addr)
-			case "country":
-				matched = matched || intel != nil && intel.Confidence != "low" && strings.EqualFold(v, intel.Country)
-			case "asn":
-				matched = matched || intel != nil && strconv.Itoa(intel.ASN) == v
-			case "network_type":
-				matched = matched || intel != nil && intel.NetworkType == v
-			}
-		}
-		if matched {
-			return rule.Action == "deny"
-		}
-	}
-	return false
 }
 func (s *Server) backups(w http.ResponseWriter, r *http.Request) {
 	entries, err := os.ReadDir(s.config.Database.BackupPath)

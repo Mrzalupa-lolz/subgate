@@ -20,10 +20,8 @@
     nodes: '<rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01M7 17.5h.01M16 6.5h2M16 17.5h2"/>',
     users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
     agents: '<path d="m12 3 8 4v10l-8 4-8-4V7l8-4ZM4 7l8 4 8-4M12 11v10"/>',
-    tiers: '<path d="m12 3 9 5-9 5-9-5 9-5ZM3 12l9 5 9-5M3 16l9 5 9-5"/>',
-    policies: '<path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6l8-3Z"/><path d="m8 12 3 3 5-6"/>',
-    pins: '<path d="m16 3 5 5-5 1-4 4-1 5-5-5 5-1 4-4 1-5ZM6 18l-3 3"/>',
-    'geo-rules': '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a18 18 0 0 1 0 18 18 18 0 0 1 0-18Z"/>',
+    analysis: '<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="12" r="2"/>',
+    incidents: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a18 18 0 0 1 0 18 18 18 0 0 1 0-18Z"/>',
     activity: '<path d="M8 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3M8 7h6M7 12h6M7 17h4M16 3h5v5M21 3l-8 8"/>',
     ipintel: '<circle cx="10" cy="10" r="7"/><path d="m15 15 6 6M10 7v6M7 10h6"/>',
     alerts: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/>',
@@ -41,39 +39,20 @@
     error: '<path d="m12 3 10 18H2L12 3ZM12 9v4M12 17h.01"/>',
   };
   const pages = {
-    overview: ['Обзор', 'Вся инфраструктура в одном месте. Состояние флота, шлюза и телеметрии.'],
-    live: ['Live-трафик', 'Текущая скорость по пользователям и нодам. Только свежие измерения агентов.'],
+    overview: ['Обзор', 'Что требует внимания: состояние нод, полнота телеметрии и наблюдения Xray.'],
+    live: ['Live-трафик', 'Текущая скорость по аккаунтам и нодам. Только свежие измерения агентов.'],
     nodes: ['Ноды', 'Состояние и протоколы нод, синхронизированных с Remnawave.'],
-    users: ['Пользователи', 'Управление доступом, сроком подписки и счётчиками трафика.'],
-    agents: ['Агенты', 'Подключение коллекторов Xray, состояние сбора и диагностика.'],
-    tiers: ['Тарифные группы', 'Группы нод, стратегия выбора и резервная группа.'],
-    policies: ['Политики', 'Реестр политик доступа с привязкой к тарифной группе.'],
-    pins: ['Закрепления', 'Реестр индивидуальных привязок пользователя к ноде.'],
-    'geo-rules': ['Геоправила', 'Проверка адреса клиента при запросе подписки.'],
-    activity: ['Журнал активности', 'Назначения соединений из журналов Xray. Доступ и экспорт фиксируются в аудите.'],
+    agents: ['Агенты', 'Коллекторы Xray, состояние сбора, очереди и диагностика.'],
+    incidents: ['Разбор аномалий', 'Наблюдения по журналам Xray: измерения, контекст и ваше решение.'],
+    analysis: ['Правила анализа', 'Xray, nDPI, длительная перегрузка и временные ограничения.'],
+    activity: ['Журнал Xray', 'Источники и назначения соединений. Доступ и экспорт фиксируются в аудите.'],
     ipintel: ['IP Intelligence', 'Проверка IPv4 и IPv6 по локальным источникам IP-данных.'],
     alerts: ['Оповещения', 'Реестр событий и заметок для оператора.'],
     backups: ['Резервные копии', 'Зашифрованные согласованные снимки базы данных SubGate.'],
-    audit: ['Аудит', 'История входов, изменений конфигурации и доступа к чувствительным данным.'],
-    settings: ['Настройки', 'Фактическая конфигурация запущенного Core и состояние компонентов.'],
+    audit: ['Аудит', 'История входов, решений и изменений конфигурации.'],
+    settings: ['Настройки', 'Конфигурация Core и состояние компонентов.'],
   };
   const schemas = {
-    tiers: {
-      sample: { name: 'Europe', strategy: 'leastLoad', min_healthy: 1, node_ids: [], fallback_tier_id: '', enabled: true },
-      help: 'name — обязательное имя. strategy: random, roundRobin, leastPing или leastLoad. node_ids — UUID нод; min_healthy — минимальное число онлайн-нод; fallback_tier_id — ID резервной группы без циклов; enabled включает группу. leastLoad использует число пользователей. leastPing выбирает только успешную TCP/TLS пробу не старше 10 минут; если проб нет, используется резерв или исходная подписка. Политика выбирает ноду из группы и фильтрует распознанные адреса подписки. Неизвестные форматы и адреса сохраняются.',
-    },
-    policies: {
-      sample: { name: 'Default', tier_id: '', conditions: { countries: [], asns: [], user_agent: '' }, priority: 10, enabled: true },
-      help: 'name — обязательное имя. tier_id ссылается на существующую группу. conditions: countries — коды стран, asns — ASN строками без AS, user_agent — часть строки клиента. Пустые условия подходят всем клиентам. priority — порядок проверки (меньше раньше); enabled включает политику. Первая подходящая политика выбирает ноду из группы для распознанных адресов подписки. Неизвестные протоколы и неоднозначные адреса сохраняются.',
-    },
-    pins: {
-      sample: { user_id: '', node_id: '', enabled: true },
-      help: 'user_id и node_id обязательны и должны существовать в синхронизированном реестре. enabled включает закрепление. Онлайн-нода пользователя выбирается раньше тарифной политики. Core фильтрует только распознанные адреса подписки; неизвестные протоколы и неоднозначные адреса сохраняются. Если нода недоступна, проверяются политики.',
-    },
-    'geo-rules': {
-      sample: { name: 'Blocked network', rule_type: 'cidr', action: 'deny', values: ['192.0.2.0/24'], enabled: true },
-      help: 'name — обязательное имя. rule_type: country, asn, cidr или network_type. action: allow или deny. values — непустой массив строк: коды стран (FI), ASN без AS (12345), CIDR или тип сети (hosting). enabled включает проверку. Правила применяются к запросам подписок; первое совпадение определяет решение. Для country нужны IP-данные с достаточной уверенностью.',
-    },
     alerts: {
       sample: { name: 'Заметка оператора', severity: 'info', message: '', node_id: '', created_at: new Date().toISOString() },
       help: 'name, message, severity (info, warning, critical), node_id и created_at описывают событие. Это реестр заметок; автоматическая отправка уведомлений и вычисление условий в этой версии не подключены.',
@@ -137,7 +116,7 @@
   }
   function panel(title, body, aside = '') { return `<section class="panel"><div class="panel-head"><h2>${esc(title)}</h2>${aside}</div>${body}</section>`; }
   function metric(title, value, foot, glyph, suffix = '') {
-    return `<article class="metric"><div class="metric-head">${esc(title)}${icon(glyph)}</div><div class="metric-value">${esc(value)}${suffix ? `<small>${esc(suffix)}</small>` : ''}</div><div class="metric-foot">${esc(foot)}</div></article>`;
+    return `<article class="metric" data-tone="${esc(glyph)}"><div class="metric-head">${esc(title)}${icon(glyph)}</div><div class="metric-value">${esc(value)}${suffix ? `<small>${esc(suffix)}</small>` : ''}</div><div class="metric-foot">${esc(foot)}</div></article>`;
   }
   function filters() { return state.filters[state.route] || (state.filters[state.route] = { q: '', offset: 0 }); }
   function actionButton(action, text, extras = '', classes = '') {
@@ -146,7 +125,7 @@
   function refreshButton() { return `<button type="button" data-action="refresh" aria-label="Обновить данные">${icon('refresh')}Обновить</button>`; }
   function pageHead(actions = '') {
     const [title, description] = pages[state.route];
-    return `<header class="page-head"><div><div class="eyebrow">Operations / ${esc(state.route)}</div><h1>${esc(title)}</h1><p>${esc(description)}</p></div><div class="head-actions">${actions}${refreshButton()}</div></header>`;
+    return `<header class="page-head"><div><div class="eyebrow">SubGate / Мониторинг</div><h1>${esc(title)}</h1><p>${esc(description)}</p></div><div class="head-actions">${actions}${refreshButton()}</div></header>`;
   }
   function toolbar(placeholder) {
     return `<div class="toolbar"><label class="search-field"><span class="sr-only">${esc(placeholder)}</span><input id="page-search" type="search" autocomplete="off" data-filter="q" value="${esc(filters().q)}" placeholder="${esc(placeholder)}"></label><small>${state.loading ? 'Обновление…' : 'Обновляется автоматически'}</small></div>`;
@@ -213,17 +192,22 @@
     const route = Object.hasOwn(pages, candidate) ? candidate : 'overview';
     if (route === 'activity' && query) {
       const params = new URLSearchParams(query);
-      state.filters.activity = { ...state.filters.activity, user: params.get('user') || '', q: '', offset: 0 };
+      const localTime = value => {
+        const parsed = parseDate(value);
+        if (!parsed) return '';
+        return new Date(parsed.getTime() - parsed.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      };
+      state.filters.activity = { user: params.get('user') || '', node: params.get('node') || '', from: localTime(params.get('from')), to: localTime(params.get('to')), q: '', offset: 0 };
     }
     return route === 'activity' && !canWrite() ? 'overview' : route;
   }
   function renderShell() {
     const groups = [
-      ['МОНИТОРИНГ', ['overview', 'live', 'nodes', 'users', 'agents']],
-      ['КОНФИГУРАЦИЯ', ['tiers', 'policies', 'pins', 'geo-rules']],
-      ['ОПЕРАЦИИ', ['activity', 'ipintel', 'alerts', 'backups', 'audit', 'settings']],
+      ['НАБЛЮДЕНИЕ', ['overview', 'live', 'nodes', 'agents']],
+      ['АНАЛИЗ', ['incidents', 'activity', 'ipintel', 'analysis']],
+      ['СЕРВИС', ['alerts', 'backups', 'audit', 'settings']],
     ];
-    app.innerHTML = `<a class="skip-link" href="#main-content">Перейти к содержимому</a><aside class="sidebar" id="sidebar" aria-label="Главное меню"><a class="brand" href="#/overview"><span class="logo-mark">S</span>SubGate<small>CORE</small></a><div class="workspace"><span class="workspace-avatar">${icon('nodes')}</span><span><strong>Operations console</strong><small>Контроль инфраструктуры</small></span></div><nav class="nav">${groups.map(([label, routes]) => `<div class="nav-label">${label}</div>${routes.filter(route => route !== 'activity' || canWrite()).map(route => `<a href="#/${route}" data-route="${route}">${icon(route)}${pages[route][0]}</a>`).join('')}`).join('')}</nav><div class="sidebar-foot"><span class="status-dot" id="connection-dot"></span><span id="connection-label">Core подключён</span><small class="sidebar-version">SubGate · <span id="sidebar-version">—</span></small></div></aside><div class="shell"><div class="topbar"><div class="crumb"><button class="menu-button" type="button" data-action="menu" aria-label="Открыть меню" aria-controls="sidebar" aria-expanded="false">${icon('menu')}</button><span class="root-crumb">Workspace</span><span id="breadcrumb"></span></div><div class="top-right"><span class="clock" id="clock"></span><span class="avatar" title="Владелец">${esc(state.user.Username.slice(0, 2).toUpperCase())}</span><span>${esc(state.user.Username)}</span><button type="button" class="ghost" data-action="logout" aria-label="Выйти из аккаунта" title="Выйти">${icon('logout')}</button></div></div><main class="content" id="main-content" tabindex="-1"></main></div>`;
+    app.innerHTML = `<a class="skip-link" href="#main-content">Перейти к содержимому</a><aside class="sidebar" id="sidebar" aria-label="Главное меню"><a class="brand" href="#/overview"><span class="logo-mark">S</span>SubGate<small>CORE</small></a><div class="workspace"><span class="workspace-avatar">${icon('nodes')}</span><span><strong>Мониторинг VPN</strong><small>Ноды · Xray · Разбор аномалий</small></span></div><nav class="nav">${groups.map(([label, routes]) => `<div class="nav-label">${label}</div>${routes.filter(route => route !== 'activity' || canWrite()).map(route => `<a href="#/${route}" data-route="${route}">${icon(route)}${pages[route][0]}</a>`).join('')}`).join('')}</nav><div class="sidebar-foot"><span class="status-dot" id="connection-dot"></span><span id="connection-label">Core подключён</span><small class="sidebar-version">SubGate · <span id="sidebar-version">—</span></small></div></aside><div class="shell"><div class="topbar"><div class="crumb"><button class="menu-button" type="button" data-action="menu" aria-label="Открыть меню" aria-controls="sidebar" aria-expanded="false">${icon('menu')}</button><span class="root-crumb">Инфраструктура</span><span id="breadcrumb"></span></div><div class="top-right"><span class="clock" id="clock"></span><span class="avatar" title="Владелец">${esc(state.user.Username.slice(0, 2).toUpperCase())}</span><span>${esc(state.user.Username)}</span><button type="button" class="ghost" data-action="logout" aria-label="Выйти из аккаунта" title="Выйти">${icon('logout')}</button></div></div><main class="content" id="main-content" tabindex="-1"></main></div>`;
     updateShell();
   }
   function updateShell() {
@@ -305,6 +289,11 @@
       } else if (route === 'nodes') {
         const [list, probes] = await Promise.all([get(`/nodes?${query}`), get('/health/probes?limit=1000')]);
         data = { list, probes };
+      } else if (route === 'incidents') {
+        data = { list: await get('/incidents?limit=200') };
+      } else if (route === 'analysis') {
+        const [policy, shaper, monitor] = await Promise.all([get('/analysis/policy'), get('/analysis/shaper'), get('/analysis/monitor')]);
+        data = { ...policy, shaper, monitor };
       } else if (route === 'activity') {
         data = { list: await get(`/activity?${activityQuery(f)}`) };
       } else if (route === 'ipintel') {
@@ -353,7 +342,7 @@
     const selection = focusID && typeof focused.selectionStart === 'number' ? [focused.selectionStart, focused.selectionEnd] : null;
     if (state.chartCleanup) state.chartCleanup();
     state.chartCleanup = null;
-    const functions = { overview: overviewPage, live: livePage, nodes: nodesPage, users: usersPage, agents: agentsPage, activity: activityPage, ipintel: ipintelPage, backups: backupsPage, audit: auditPage, settings: settingsPage };
+    const functions = { overview: overviewPage, live: livePage, nodes: nodesPage, agents: agentsPage, incidents: incidentsPage, analysis: analysisPage, activity: activityPage, ipintel: ipintelPage, backups: backupsPage, audit: auditPage, settings: settingsPage };
     const body = override || (functions[state.route] ? functions[state.route]() : configPage());
     const demo = state.status?.demo ? '<div class="demo-banner">' + icon('error') + '<strong>DEMO</strong><span>Демонстрационные ноды и пользователи. Синтетический трафик не генерируется; измерения появятся после подключения агента.</span></div>' : '';
     main.innerHTML = (override ? pageHead() : '') + demo + body + `<footer class="footer"><span>SubGate · ${esc(state.status?.version || 'Core')} · Владелец</span><span id="updated-at">${state.updated ? `Обновлено ${date(state.updated, true)}` : ''}</span></footer>`;
@@ -385,12 +374,12 @@
     const { status, nodes, agents, live, alerts } = state.data;
     if (!status) return '';
     const onlineNodes = (nodes.data || []).filter(node => node.status === 'online').length;
-    const g = status.gateway || {};
-    const hit = finite(g.requests) ? `${Math.round(finite(g.cache_hits) / finite(g.requests) * 100)}%` : '—';
-    const health = `<div class="panel-body"><div class="health-item"><span>Core</span>${badge('online')}</div><div class="health-item"><span>Синхронизация</span>${badge(status.sync_error ? 'error' : status.demo ? 'info' : parseDate(status.last_sync) ? 'success' : 'unknown')}</div><div class="health-item"><span>Последняя синхронизация</span><strong>${esc(date(status.last_sync))}</strong></div><div class="health-item"><span>Uptime Core</span><strong>${esc(duration(status.uptime_seconds))}</strong></div><div class="health-item"><span>Запросы подписок</span><strong>${count(g.requests)}</strong></div><div class="health-item"><span>Попадания в кэш</span><strong>${esc(hit)}</strong></div><div class="health-item"><span>Резервные ответы</span><strong>${count(g.fallbacks)}</strong></div></div>`;
+    const sourceErrors = (agents.data || []).filter(agent => agent.status !== 'revoked' && (!agent.online || agent.diagnostics?.stats_error || agent.diagnostics?.logs_error)).length;
+    const health = `<div class="panel-body"><div class="health-item"><span>Core</span>${badge('online')}</div><div class="health-item"><span>Связь с Remnawave</span>${badge(status.sync_error ? 'error' : parseDate(status.last_sync) ? 'success' : 'unknown')}</div><div class="health-item"><span>Синхронизация</span><strong>${esc(date(status.last_sync))}</strong></div><div class="health-item"><span>Источники с проблемами</span><strong class="${sourceErrors ? 'negative' : 'positive'}">${count(sourceErrors)}</strong></div><div class="health-item"><span>Записей Xray сохранено</span><strong>${count(status.activity_events)}</strong></div><div class="health-item"><span>Uptime Core</span><strong>${esc(duration(status.uptime_seconds))}</strong></div></div>`;
     const alertBody = (alerts.data || []).length ? `<div class="alert-strip">${alerts.data.map(item => `<article><div>${badge(item.severity || 'info')}<strong>${esc(item.name)}</strong></div><p>${esc(item.message || '')}</p></article>`).join('')}</div>` : empty('Оповещений нет', 'В реестре нет текущих событий.', 'alerts');
     return pageHead(canWrite() ? `<button type="button" class="primary" data-action="sync">${icon('refresh')}Синхронизировать</button>` : '') +
-      `<div class="metrics">${metric('Ноды в инфраструктуре', count(status.nodes), `${count(onlineNodes)} онлайн по данным панели`, 'nodes')}${metric('Пользователи', count(status.users), 'Синхронизированный реестр Remnawave', 'users')}${metric('Агенты онлайн', count(status.agents_online), `Из ${count((agents.data || []).length)} подключённых коллекторов`, 'agents')}${metric('Потоки телеметрии', count((live.data || []).length), `↓ ${speed(live.downlink_bps)} · ↑ ${speed(live.uplink_bps)}`, 'live')}</div>` +
+      `<div class="metrics">${metric('Ноды в инфраструктуре', count(status.nodes), `${count(onlineNodes)} онлайн по данным панели`, 'nodes')}${metric('Ожидают разбора', count(status.incidents_new), 'Наблюдения Xray, требующие вашего решения', 'alerts')}${metric('Агенты онлайн', count(status.agents_online), `Из ${count((agents.data || []).length)} подключённых коллекторов`, 'agents')}${metric('Потоки телеметрии', count((live.data || []).length), `↓ ${speed(live.downlink_bps)} · ↑ ${speed(live.uplink_bps)}`, 'live')}</div>` +
+      `<div class="attention-grid"><a class="attention-card" href="#/incidents">${icon('alerts')}<span><strong>Разобрать аномалии</strong><small>${count(status.incidents_new)} новых наблюдений · признаки и решения</small></span>${icon('arrow')}</a><a class="attention-card violet" href="#/agents">${icon('agents')}<span><strong>Проверить источники</strong><small>${sourceErrors ? count(sourceErrors) + ' агентов требуют внимания' : 'Диагностика сбора, очереди и пропуски'}</small></span>${icon('arrow')}</a></div>` +
       (status.sync_error ? `<div class="notice error">Синхронизация с панелью: ${esc(status.sync_error)}</div>` : '') +
       `<div class="grid-main">${chartPanel()}${panel('Состояние системы', health, '<a class="view-link" href="#/settings">Подробнее ' + icon('arrow') + '</a>')}</div>` +
       panel('Флот нод', nodeTable((nodes.data || []).slice(0, 8), false), `<a class="view-link" href="#/nodes">Все ноды ${icon('arrow')}</a>`) +
@@ -426,15 +415,7 @@
     const list = state.data.list || { data: [], total: 0 };
     return pageHead(canWrite() ? '<button type="button" class="primary" data-action="sync">' + icon('refresh') + 'Синхронизировать</button>' : '') + toolbar('Поиск по имени, IP, стране или протоколу') + panel('Ноды Remnawave', nodeTable(list.data || []) + pageFoot(list.total || 0, (list.data || []).length), `<small>${count(list.total)} нод</small>`) + '<p class="help-line">Проверка измеряет установление TCP-соединения и TLS при наличии TLS. Она не подтверждает авторизацию VLESS/REALITY или работу транспортов. Для UDP и QUIC требуется отдельная проверка протокола.</p>';
   }
-  function usersPage() {
-    const list = state.data.list || { data: [], total: 0 };
-    const rows = (list.data || []).map(user => [
-      `<strong>${esc(user.username || user.id)}</strong><small>${esc(user.email || '')}</small>`, `<span class="mono">${esc(user.id)}</span>`, badge(user.status),
-      `<strong>${esc(bytes(user.used_traffic_bytes))}</strong><small>${finite(user.traffic_limit_bytes) ? `из ${esc(bytes(user.traffic_limit_bytes))} · ${Math.round(finite(user.used_traffic_bytes) / finite(user.traffic_limit_bytes) * 100)}%` : 'Без лимита'}</small>`,
-      esc(date(user.expire_at)), `<span class="mono">${esc(user.short_uuid || '—')}</span>`, resourceActions('users', user),
-    ]);
-    return pageHead() + '<div class="notice">Управление пользователями доступно в Remnawave Subscription Middleware. Здесь — состояние подписок, трафик и журнал активности.</div>' + toolbar('Поиск по имени, email, ID или состоянию') + panel('Пользователи Remnawave', table(['Пользователь', 'ID', 'Состояние', 'Трафик', 'Подписка до', 'Short UUID', 'Действия'], rows, { title: 'Пользователей ещё нет', detail: 'Реестр заполняется при синхронизации с Remnawave.', icon: 'users' }) + pageFoot(list.total || 0, (list.data || []).length), `<small>${count(list.total)} пользователей</small>`);
-  }
+
   function livePage() {
     const live = state.data.live || {};
     const q = String(filters().q || '').toLowerCase();
@@ -489,15 +470,61 @@
     const list = state.data.list || { data: [], total: 0 };
     const schema = schemas[kind];
     const rows = (list.data || []).map(item => {
-      let summary;
-      if (kind === 'tiers') summary = `${item.strategy || '—'} · ${(item.node_ids || []).length} нод · min ${item.min_healthy ?? '—'}`;
-      else if (kind === 'policies') summary = `Группа: ${item.tier_id || '—'}`;
-      else if (kind === 'pins') summary = `${item.user_id || '—'} → ${item.node_id || '—'}`;
-      else if (kind === 'geo-rules') summary = `${item.rule_type || '—'} · ${item.action || '—'} · ${(item.values || []).join(', ')}`;
-      else summary = item.message || '—';
+      const summary = item.message || '—';
       return [`<strong>${esc(item.name || item.id)}</strong><small class="mono">${esc(item.id)}</small>`, `<span class="wrap-cell">${esc(summary)}</span>`, kind === 'alerts' ? badge(item.severity || 'info') : badge(item.enabled === true ? 'active' : item.enabled === false ? 'disabled' : 'unknown'), `<div class="table-actions">${actionButton('edit-config', canWrite() ? 'Изменить' : 'Открыть', `data-kind="${kind}" data-id="${esc(item.id)}"`)}${canWrite() ? actionButton('delete-config', 'Удалить', `data-kind="${kind}" data-id="${esc(item.id)}"`, 'danger') : ''}</div>`];
     });
     return pageHead(canWrite() ? `<button type="button" class="primary" data-action="new-config" data-kind="${kind}">${icon('plus')}Создать</button>` : '') + `<details class="notice"><summary>Поддерживаемые поля и поведение</summary><p>${esc(schema.help)}</p></details>` + toolbar('Поиск по имени, ID или содержимому') + panel(pages[kind][0], table(['Запись', 'Конфигурация', kind === 'alerts' ? 'Уровень' : 'Состояние', 'Действия'], rows, { title: 'Записей пока нет', detail: 'Нажмите «Создать» и заполните форму. Расширенный JSON-редактор доступен в окне настройки.', icon: kind }) + pageFoot(list.total || 0, (list.data || []).length), `<small>${count(list.total)} записей</small>`);
+  }
+  const incidentLabels = { connection_rate: 'Частота записей соединений', destination_breadth: 'Много IP назначения', port_breadth: 'Много портов одного назначения', dpi_protocol: 'Классификация nDPI', sustained_overload: 'Длительная перегрузка' };
+  const reviewLabels = { new: 'Новое', reviewing: 'На разборе', confirmed: 'Подтверждено', false_positive: 'Ложное срабатывание', resolved: 'Закрыто' };
+  function incidentJournalLink(item) {
+    const start = parseDate(item.first_seen);
+    const query = new URLSearchParams({ user: item.user_id, node: item.node_id });
+    if (start) {
+      const minute = Math.floor(start.getTime() / 60000) * 60000;
+      query.set('from', new Date(minute).toISOString());
+      query.set('to', new Date(minute + 60000).toISOString());
+    }
+    return `#/activity?${query}`;
+  }
+  function incidentsPage() {
+    const all = state.data.list?.data || [];
+    const f = filters();
+    const q = String(f.q || '').toLowerCase();
+    const items = all.filter(item => (!f.status || item.status === f.status) && (!q || JSON.stringify(item).toLowerCase().includes(q)));
+    const rows = items.map(item => [
+      `<strong>${esc(incidentLabels[item.kind] || item.kind)}</strong><small>${item.kind === 'dpi_protocol' ? 'nDPI · метаданные потока' : item.kind === 'sustained_overload' ? 'Интерфейс ноды · несколько минут' : 'Xray access.log · окно 60 сек (UTC)'}</small>${item.truncated ? '<small class="negative">Неполные данные или неоднозначная атрибуция</small>' : ''}`,
+      `<a href="${esc(incidentJournalLink(item))}" class="mono">${esc(item.user_id)}</a><small class="mono">Нода: ${esc(item.node_id)}</small>`,
+      `<strong>${count(item.value)} / ${count(item.threshold)}</strong><small>${item.target ? esc(item.target) : 'Значение / порог наблюдения'}</small>`,
+      `<span class="badge ${item.status === 'new' ? 'amber' : item.status === 'confirmed' ? 'red' : 'neutral'}">${esc(reviewLabels[item.status] || item.status)}</span>${item.note ? `<small class="wrap-cell">${esc(item.note)}</small>` : ''}`,
+      `${esc(date(item.last_seen))}<small>С ${esc(date(item.first_seen, true))}</small>`,
+      actionButton('review-incident', 'Разобрать', `data-id="${esc(item.id)}"`, 'primary'),
+    ]);
+    return pageHead() + `<div class="metrics">${metric('Новые', count(all.filter(i => i.status === 'new').length), 'В последних 200 наблюдениях', 'alerts')}${metric('На разборе', count(all.filter(i => i.status === 'reviewing').length), 'Требуют проверки контекста', 'clock')}${metric('Подтверждены', count(all.filter(i => i.status === 'confirmed').length), 'Решение владельца', 'check')}${metric('Ложные сигналы', count(all.filter(i => i.status === 'false_positive').length), 'Для настройки порогов', 'ipintel')}</div>` +
+      '<div class="notice">Порог и метка протокола — повод проверить активность. Автоматическое ограничение требует включённой политики, повторных nDPI-подтверждений, точной атрибуции и значительного вклада аккаунта в длительную перегрузку. Команды и отчёты доступны в правилах анализа.</div>' +
+      toolbar('Поиск по аккаунту, ноде, признаку или заметке') + `<div class="queue-filters"><label>Состояние<select id="incident-status" data-filter="status"><option value="">Все состояния</option>${Object.entries(reviewLabels).map(([value,label]) => `<option value="${value}" ${f.status === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label><span>Последние 200 наблюдений · хранение 14 дней</span></div>` +
+      panel('Очередь разбора', table(['Наблюдение', 'Аккаунт / нода', 'Измерение', 'Решение', 'Обнаружено', 'Действие'], rows, { title: 'Наблюдений по фильтру нет', detail: 'Это не подтверждает отсутствие нарушений. Проверьте подключение агентов и полноту логов Xray.', icon: 'alerts' }));
+  }
+  function analysisPage() {
+    const p = state.data.policy || {};
+    const pairs = [['Записей соединений за минуту', p.connections_per_minute], ['Портов одного назначения за минуту', p.ports_per_host_per_minute], ['Разных IP назначения за минуту', p.ips_per_minute]];
+    return pageHead(actionButton('edit-analysis', 'Настроить пороги', '', 'primary')) +
+      '<div class="notice">Пороги создают наблюдения для разбора. Окна фиксированные минутные; события на границе окна разделяются. Задержанные более чем на 2 минуты события сохраняются в журнале и не создают текущих сигналов.</div>' +
+      `<div class="split">${panel('Наблюдения Xray', `<div class="panel-body">${pairs.map(([label,value]) => `<div class="setting-row"><span>${label}</span><strong>${count(value)}</strong></div>`).join('')}<p class="help-line">Считаются уникальные записи лога, не одновременные соединения.</p><div class="setting-row"><span>Перегрузка / восстановление</span><strong>${count(p.overload_percent)}% / ${count(p.recovery_percent)}%</strong></div><div class="setting-row"><span>Последовательных минут перегрузки</span><strong>${count(p.sustained_minutes)}</strong></div></div>`)}${panel('Временный shaper', `<div class="panel-body"><span class="badge ${p.automatic_shaper ? 'red' : 'neutral'}">${p.automatic_shaper ? 'Автоматика включена' : 'Автоматика выключена'}</span><div class="setting-row"><span>Лимит на направление</span><strong>${p.shaper_mbps ? count(p.shaper_mbps) + ' Мбит/с' : 'Не задан'}</strong></div><div class="setting-row"><span>Срок ограничения</span><strong>${p.shaper_minutes ? count(p.shaper_minutes) + ' мин' : 'Не задан'}</strong></div><p>Ограничиваемые протоколы: ${esc((p.restricted_protocols || []).join(', ') || 'Не выбраны')}</p><p>Исключений: ${count((p.allowlist || []).length)}</p><p class="help-line">Требуется подключённый Linux worker и выделенные интерфейсы аккаунтов. Потери, догадки nDPI и общий IP исключают автоматическое решение. TTL снимается на ноде независимо от Core.</p></div>`)}</div>` +
+      `<div class="section-gap">${panel('nDPI и длительная перегрузка', '<div class="panel-body"><p>Коллектор передаёт протокол, качество классификации, версию, объёмы и потери. Содержимое трафика не передаётся. Расход и P2P сами по себе не разрешают ограничение.</p><p>Перегрузка учитывает ёмкость интерфейса, полноту минут, потери, CPU, исторический baseline и два окна восстановления. Для ограничения проверяется вклад аккаунта по независимым счётчикам Xray.</p></div>')}</div>` +
+      `<div class="section-gap">${panel('Коллекторы и нагрузка нод', table(['Нода', 'Ёмкость / нагрузка', 'Качество', 'Последний отчёт'], (state.data.monitor?.data || []).map(item => [
+        `<strong class="mono">${esc(item.node_id)}</strong>${item.overloaded ? '<small class="negative">Длительная перегрузка</small>' : ''}`,
+        `${count(item.capacity_mbps)} Мбит/с<small>Последняя минута: ${count(item.window?.Mbps || 0)} Мбит/с · baseline ${count(item.baseline_mbps || 0)}</small>`,
+        `<span class="wrap-cell">${esc(item.collector_error || 'Ошибок коллектора нет')}</span><small>${item.window?.Complete ? 'Минутное окно полное' : 'Недостаточно данных окна'} · потоков ${count(item.flows)}</small>`,
+        esc(date(item.received_at)),
+      ]), { title: 'Коллекторы не подключены', detail: 'Подключите дополнительный Linux worker на нодах.', icon: 'agents' }))}</div>` +
+      `<div class="section-gap">${panel('Команды shaper и отчёты нод', table(['Аккаунт / нода', 'Лимит / срок', 'Состояние', 'Основание', 'Действие'], (state.data.shaper?.data || []).map(item => [
+        `<strong class="mono">${esc(item.action.user_id)}</strong><small>${esc(item.action.node_id)}</small>`,
+        `${count(item.action.mbps)} Мбит/с<small>До ${esc(date(item.action.expires_at))}</small>`,
+        `${badge(item.status)}<small>${esc(item.result?.error || '')}</small>`,
+        `<span class="wrap-cell">${esc(item.action.reason)}</span>`,
+        ['pending','applied','failed'].includes(item.status) ? actionButton('cancel-shaper', 'Снять', `data-id="${esc(item.action.id)}"`, 'danger') : '—',
+      ]), { title: 'Команд пока нет', detail: 'Новые команды появятся при выполнении всех условий политики.', icon: 'analysis' }))}</div>`;
   }
   function activityQuery(f = filters(), exportFormat) {
     const query = new URLSearchParams({ limit: exportFormat ? '10000' : '500' });
@@ -545,10 +572,10 @@
     const s = state.data.status || {};
     const groups = [
       ['Core и доступ', [['HTTP listener', cfg.listen], ['Режим', cfg.demo ? 'Demo' : 'Рабочий'], ['Тайм-аут сессии', `${cfg.session_timeout_hours ?? '—'} ч`], ['Учётная запись', 'Владелец — полный доступ'], ['Шифрование активности', cfg.activity_encrypted ? 'Включено' : 'Отключено'], ['Хранение активности', `${cfg.activity_hot_days ?? '—'} дней`]]],
-      ['Remnawave и подписки', [['Адрес панели', cfg.panel_url || 'Не настроен'], ['Источник подписок', cfg.subscription_url || 'Не настроен'], ['Интервал синхронизации', `${cfg.sync_interval_seconds ?? '—'} сек`], ['Режим протоколов', cfg.protocol_mode || '—'], ['Последняя синхронизация', date(s.last_sync)], ['Ошибка синхронизации', s.sync_error || 'Нет']]],
+      ['Связь с Remnawave', [['Адрес панели', cfg.panel_url || 'Не настроен'], ['Интервал синхронизации', `${cfg.sync_interval_seconds ?? '—'} сек`], ['Последняя синхронизация', date(s.last_sync)], ['Ошибка синхронизации', s.sync_error || 'Нет']]],
       ['Хранение данных', [['Резервные копии', cfg.backup_path || '—'], ['IP Intelligence', cfg.ipintel_data_path || '—'], ['Uptime', duration(s.uptime_seconds)], ['Событий в журнале', count(s.activity_events)]]],
     ];
-    return pageHead() + '<div class="notice">Настройки доступны для просмотра. Изменение параметров выполняется в конфигурации сервиса с перезапуском Core. Секреты и пароли в консоль не передаются.</div>' + `<div class="split">${groups.map(([title, pairs]) => panel(title, `<div class="panel-body">${pairs.map(([label, value]) => `<div class="setting-row"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`).join('')}</div>`)).join('')}${panel('Диагностика компонентов', `<div class="panel-body"><h3>База данных</h3><pre class="code">${esc(JSON.stringify(s.database || {}, null, 2))}</pre><h3>IP Intelligence</h3><pre class="code">${esc(JSON.stringify(s.ipintel || {}, null, 2))}</pre><h3>Шлюз подписок</h3><pre class="code">${esc(JSON.stringify(s.gateway || {}, null, 2))}</pre></div>`)}</div>`;
+    return pageHead() + '<div class="notice">Настройки доступны для просмотра. Изменение параметров выполняется в конфигурации сервиса с перезапуском Core. Секреты и пароли в консоль не передаются.</div>' + `<div class="split">${groups.map(([title, pairs]) => panel(title, `<div class="panel-body">${pairs.map(([label, value]) => `<div class="setting-row"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`).join('')}</div>`)).join('')}${panel('Диагностика компонентов', `<div class="panel-body"><h3>База данных</h3><pre class="code">${esc(JSON.stringify(s.database || {}, null, 2))}</pre><h3>IP Intelligence</h3><pre class="code">${esc(JSON.stringify(s.ipintel || {}, null, 2))}</pre></div>`)}</div>`;
   }
 
   function drawChart(canvas, input) {
@@ -646,93 +673,11 @@
     return (list || []).find(item => String(item.id) === id);
   }
   function option(value, label, selected) { return `<option value="${esc(value)}"${String(value) === String(selected) ? ' selected' : ''}>${esc(label)}</option>`; }
-  function referenceOptions(items, selected, label, exclude = '') {
-    const available = items.filter(item => String(item.id) !== String(exclude));
-    const missing = selected && !available.some(item => String(item.id) === String(selected));
-    return option('', label, selected) + (missing ? option(selected, `${selected} · больше не найден`, selected) : '') + available.map(item => option(item.id, `${item.name || item.username || item.id}${item.ip_address ? ` · ${item.ip_address}` : ''}`, selected)).join('');
-  }
-  function configFields(kind, value, refs) {
-    const text = (name, label, content, extra = '') => `<label>${label}<input id="config-${name}" name="${name}" value="${esc(content ?? '')}" ${extra}></label>`;
-    const choice = (name, label, options, required = true) => `<label>${label}<select id="config-${name}" name="${name}"${required ? ' required' : ''}>${options}</select></label>`;
-    const enabled = `<label class="check-control"><input type="checkbox" id="config-enabled" name="enabled" ${value.enabled ? 'checked' : ''}><span>Включено</span></label>`;
-    const name = text('name', 'Название', value.name, 'required maxlength="200" placeholder="Понятное имя для оператора"');
-    if (kind === 'tiers') {
-      const checked = new Set(value.node_ids || []);
-      const nodes = refs.nodes || [];
-      return `<div class="form-grid">${name}${choice('strategy', 'Стратегия выбора', [['leastLoad', 'Меньше пользователей'], ['roundRobin', 'По очереди'], ['random', 'Случайная нода'], ['leastPing', 'Меньше задержка пробы']].map(([key, title]) => option(key, title, value.strategy)).join(''))}${text('min_healthy', 'Минимум онлайн-нод', value.min_healthy ?? 1, 'type="number" min="1" max="1000" step="1" required')}${choice('fallback_tier_id', 'Резервная группа', referenceOptions(refs.tiers || [], value.fallback_tier_id, 'Без резервной группы', value.id), false)}</div><fieldset class="node-picker"><legend>Ноды группы</legend><div class="node-options">${nodes.length ? nodes.map(node => `<label class="check-control node-option"><input type="checkbox" name="node_ids" value="${esc(node.id)}"${checked.has(node.id) ? ' checked' : ''}><span><strong>${esc(node.name || node.id)}</strong><small>${esc(node.ip_address || node.id)} · ${esc(node.status || 'unknown')}</small></span></label>`).join('') : '<p>Ноды отсутствуют. Синхронизируйте Remnawave перед настройкой группы.</p>'}</div></fieldset><p class="help-line">leastPing использует успешную TCP/TLS пробу не старше 10 минут; UDP/QUIC и прикладная авторизация здесь не подтверждаются. При нехватке онлайн-нод проверяется резервная группа.</p>${enabled}`;
-    }
-    if (kind === 'policies') {
-      const conditions = value.conditions || {};
-      return `<div class="form-grid">${name}${choice('tier_id', 'Тарифная группа', referenceOptions(refs.tiers || [], value.tier_id, 'Выберите группу'))}${text('priority', 'Приоритет (меньше — раньше)', value.priority ?? 10, 'type="number" min="0" max="1000000" step="1" required')}${text('user_agent', 'User-Agent содержит', conditions.user_agent, 'placeholder="Пусто — любой клиент"')}${text('countries', 'Страны через запятую', (conditions.countries || []).join(', '), 'placeholder="RU, FI, DE"')}${text('asns', 'ASN через запятую', (conditions.asns || []).join(', '), 'placeholder="12345, 67890"')}</div><p class="help-line">Пустые условия подходят всем клиентам. Заполненные условия должны совпасть одновременно. Для страны и ASN нужны локальные IP-данные.</p>${enabled}`;
-    }
-    if (kind === 'pins') {
-      return `<div class="form-grid">${choice('user_id', 'Пользователь', referenceOptions(refs.users || [], value.user_id, 'Выберите пользователя'))}${choice('node_id', 'Нода', referenceOptions(refs.nodes || [], value.node_id, 'Выберите ноду'))}</div><p class="help-line">Закрепление действует, пока нода онлайн, и проверяется раньше тарифных политик.</p>${enabled}`;
-    }
-    return `<div class="form-grid">${name}${choice('rule_type', 'Тип правила', [['country', 'Страна'], ['asn', 'ASN'], ['cidr', 'IP-сеть (CIDR)'], ['network_type', 'Тип сети']].map(([key, label]) => option(key, label, value.rule_type)).join(''))}${choice('action', 'Действие', option('deny', 'Запретить подписку', value.action) + option('allow', 'Разрешить подписку', value.action))}</div><label>Значения через запятую или с новой строки<textarea id="config-values" name="values" class="values-editor" required placeholder="192.0.2.0/24, 2001:db8::/32">${esc((value.values || []).join(', '))}</textarea></label><p class="help-line">Страна: FI, DE; ASN: 12345; CIDR: 192.0.2.0/24; тип сети: hosting, home_isp, mobile, vpn, cdn, edu, gov. Первое совпадение определяет доступ.</p>${enabled}`;
-  }
   function readConfigJSON() {
     let payload;
     try { payload = JSON.parse($('#config-json').value); } catch (_) { throw new Error('JSON содержит ошибку синтаксиса. Проверьте запятые и кавычки.'); }
     if (!payload || Array.isArray(payload) || typeof payload !== 'object') throw new Error('Конфигурация должна быть JSON-объектом.');
     return payload;
-  }
-  function readConfigFields(validate = true) {
-    const editor = state.configEditor;
-    if (!canWrite()) return editor.base;
-    const form = new FormData(modalForm);
-    const get = key => String(form.get(key) ?? '').trim();
-    const split = key => [...new Set(get(key).split(/[,;\n]+/).map(value => value.trim()).filter(Boolean))];
-    const payload = { ...editor.base, enabled: form.has('enabled') };
-    if (editor.kind !== 'pins') payload.name = get('name');
-    if (editor.kind === 'tiers') {
-      payload.strategy = get('strategy'); payload.min_healthy = Number(get('min_healthy'));
-      payload.node_ids = form.getAll('node_ids').map(String); payload.fallback_tier_id = get('fallback_tier_id');
-      if (validate && payload.enabled && !payload.node_ids.length) throw new Error('Выберите хотя бы одну ноду для включённой группы.');
-    } else if (editor.kind === 'policies') {
-      payload.tier_id = get('tier_id'); payload.priority = Number(get('priority'));
-      payload.conditions = { countries: split('countries').map(value => value.toUpperCase()), asns: split('asns'), user_agent: get('user_agent') };
-      if (validate && payload.conditions.countries.some(value => !/^[A-Z]{2}$/.test(value))) throw new Error('Используйте двухбуквенные коды стран: RU, FI, DE.');
-      if (validate && payload.conditions.asns.some(value => !/^[1-9]\d*$/.test(value))) throw new Error('ASN указывается положительным числом без префикса AS.');
-    } else if (editor.kind === 'pins') {
-      payload.user_id = get('user_id'); payload.node_id = get('node_id');
-    } else {
-      payload.rule_type = get('rule_type'); payload.action = get('action'); payload.values = split('values');
-      if (payload.rule_type === 'country') payload.values = payload.values.map(value => value.toUpperCase());
-      if (validate && payload.rule_type === 'country' && payload.values.some(value => !/^[A-Z]{2}$/.test(value))) throw new Error('Используйте двухбуквенные коды стран: RU, FI, DE.');
-      if (validate && payload.rule_type === 'asn' && payload.values.some(value => !/^[1-9]\d*$/.test(value))) throw new Error('ASN указывается положительным числом без префикса AS.');
-    }
-    return payload;
-  }
-  function setConfigMode(mode) {
-    const editor = state.configEditor;
-    if (!editor || editor.mode === mode) return;
-    const fields = $('#config-fields');
-    const json = $('#config-json');
-    if (mode === 'json') {
-      editor.base = readConfigFields(false);
-      json.value = JSON.stringify(editor.base, null, 2);
-    } else {
-      editor.base = readConfigJSON();
-      fields.innerHTML = configFields(editor.kind, editor.base, editor.refs);
-    }
-    editor.mode = mode;
-    fields.hidden = mode !== 'form'; fields.disabled = mode !== 'form' || !canWrite();
-    $('#config-json-panel').hidden = mode !== 'json'; json.disabled = mode !== 'json';
-    document.querySelectorAll('[data-action="config-mode"]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.mode === mode)));
-  }
-  async function configReferences(kind, signal) {
-    const needed = { tiers: ['nodes', 'tiers'], policies: ['tiers'], pins: ['nodes', 'users'], 'geo-rules': [] }[kind] || [];
-    const results = await Promise.all(needed.map(async source => {
-      const data = [];
-      let total = 1;
-      while (data.length < total) {
-        const page = await request(`/${source}?limit=1000&offset=${data.length}`, { signal });
-        total = finite(page.total); data.push(...(page.data || []));
-        if (!(page.data || []).length) break;
-      }
-      return [source, data];
-    }));
-    return Object.fromEntries(results);
   }
   async function editConfig(kind, id) {
     const existing = id ? objectByID(kind, id) : null;
@@ -740,28 +685,18 @@
     const schema = schemas[kind];
     const value = existing || { ...schema.sample };
     if (kind === 'alerts' && !existing) value.created_at = new Date().toISOString();
-    const structured = kind !== 'alerts';
-    let refs = {};
-    if (structured) {
-      openDialog('Загрузка вариантов', '<div class="loading" role="status">Получаем ноды, пользователей и группы…</div>', null);
-      const revision = state.revision; const dialogRevision = state.dialogRevision;
-      try { refs = await configReferences(kind, state.controller?.signal); }
-      catch (error) { if (dialogRevision === state.dialogRevision) closeDialog(); throw error; }
-      if (revision !== state.revision || dialogRevision !== state.dialogRevision) return;
-    }
     const shortID = crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Array.from(crypto.getRandomValues(new Uint8Array(4)), value => value.toString(16).padStart(2, '0')).join('');
-    const objectID = id || `${({ tiers: 'tier', policies: 'policy', pins: 'pin', 'geo-rules': 'geo', alerts: 'alert' })[kind]}-${shortID}`;
-    const fields = `<label>ID записи<input name="id" id="config-id" pattern="[^/\\\\?#]+" maxlength="128" value="${esc(objectID)}" required ${id || !canWrite() ? 'readonly' : ''}></label>${structured ? `<div class="editor-switch" role="group" aria-label="Режим редактора"><button type="button" data-action="config-mode" data-mode="form" aria-pressed="true">Форма</button><button type="button" data-action="config-mode" data-mode="json" aria-pressed="false">Расширенный JSON</button></div><fieldset id="config-fields" class="config-fields"${canWrite() ? '' : ' disabled'}>${configFields(kind, value, refs)}</fieldset>` : ''}<div id="config-json-panel"${structured ? ' hidden' : ''}><label class="editor-label">Конфигурация JSON<textarea name="json" id="config-json" spellcheck="false"${structured ? ' disabled' : ''} ${canWrite() ? '' : 'readonly'}>${esc(JSON.stringify(value, null, 2))}</textarea></label></div><details class="help-line"><summary>Как применяется конфигурация</summary><p>${esc(schema.help)}</p></details>`;
+    const objectID = id || `alert-${shortID}`;
+    const fields = `<label>ID записи<input name="id" id="config-id" maxlength="128" value="${esc(objectID)}" required ${id ? 'readonly' : ''}></label><label class="editor-label">Конфигурация JSON<textarea name="json" id="config-json" spellcheck="false">${esc(JSON.stringify(value, null, 2))}</textarea></label><p class="help-line">${esc(schema.help)}</p>`;
     openDialog(`${id ? 'Конфигурация' : 'Создать'} · ${pages[kind][0]}`, fields, canWrite() ? 'Сохранить' : null, async form => {
       const dialogRevision = state.dialogRevision;
       const objectID = String(form.get('id') || '').trim();
       if (!objectID || objectID.length > 128 || /[/\\?#]/.test(objectID)) throw new Error('Укажите ID до 128 символов без /, \\, ? и #.');
-      const payload = state.configEditor?.mode === 'form' ? readConfigFields() : readConfigJSON();
+      const payload = readConfigJSON();
       await request(`/${kind}/${encodeURIComponent(objectID)}`, { method: 'PUT', body: payload });
       if (dialogRevision === state.dialogRevision) closeDialog();
       toast('Конфигурация сохранена'); await loadPage();
     });
-    if (structured) state.configEditor = { kind, base: value, refs, mode: 'form' };
   }
   function enrollmentDialog() {
     const nodes = state.data.nodes?.data || [];
@@ -859,8 +794,33 @@
       else confirmAction(labels[operation], `${labels[operation]} для ${id}? ${operation === 'reset-traffic' ? 'Счётчик трафика будет обнулён в Remnawave.' : operation === 'restart' ? 'Активные соединения на ноде могут прерваться.' : 'Доступ будет отключён в Remnawave.'}`, apply, labels[operation]);
       return;
     }
+    if (action === 'review-incident') {
+      const item = (state.data.list?.data || []).find(item => item.id === id);
+      if (!item) return;
+      openDialog('Разбор наблюдения', `<p>${esc(incidentLabels[item.kind] || item.kind)}: ${count(item.value)} при пороге ${count(item.threshold)}. Подтверждение фиксирует ваше решение; ограничений не запускает.</p><p><a href="${esc(incidentJournalLink(item))}">Открыть журнал в этом окне</a></p><label>Решение<select name="status">${Object.entries(reviewLabels).filter(([value]) => value !== 'new').map(([value,label]) => `<option value="${value}" ${item.status === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label><label class="section-gap">Основания / заметка<textarea name="note" maxlength="2000" class="review-note">${esc(item.note || '')}</textarea></label>`, 'Сохранить решение', async form => {
+        const data = form;
+        await request(`/incidents/${encodeURIComponent(id)}/review`, { method: 'PUT', body: { status: data.get('status'), note: data.get('note') } });
+        closeDialog(); toast('Решение сохранено'); await loadPage();
+      }); return;
+    }
+    if (action === 'edit-analysis') {
+      const p = state.data.policy || {};
+      const fields = [['connections_per_minute','Записей соединений / мин',100,8000],['ports_per_host_per_minute','Портов одного назначения / мин',16,1024],['ips_per_minute','Разных IP назначения / мин',32,4096],['overload_percent','Перегрузка, % ёмкости',50,100],['recovery_percent','Восстановление, % ёмкости',10,99],['sustained_minutes','Минут перегрузки подряд',2,60],['shaper_mbps','Лимит на направление, Мбит/с',0,100000],['shaper_minutes','Срок ограничения, мин',0,1440]];
+      openDialog('Анализ и временные ограничения', '<p>Автоматика требует лимит, срок и явно выбранные протоколы. Пустые значения оставляют ограничение выключенным.</p><div class="form-grid">' + fields.map(([key,label,min,max]) => `<label>${esc(label)}<input name="${key}" type="number" min="${min}" max="${max}" step="1" ${min ? 'required' : ''} value="${esc(p[key] || '')}"></label>`).join('') + `</div><label class="section-gap">Автоматический shaper<select name="automatic_shaper"><option value="false">Выключен</option><option value="true" ${p.automatic_shaper ? 'selected' : ''}>Включён</option></select></label><label class="section-gap">Ограничиваемые протоколы nDPI (точные имена, по одному на строку)<textarea name="restricted_protocols">${esc((p.restricted_protocols || []).join('\n'))}</textarea></label><label class="section-gap">Исключения (UUID аккаунтов, по одному на строку)<textarea name="allowlist">${esc((p.allowlist || []).join('\n'))}</textarea></label>`, 'Сохранить настройки', async form => {
+        const data = form;
+        const body = Object.fromEntries(fields.map(([key]) => [key, Number(data.get(key) || 0)]));
+        body.automatic_shaper = data.get('automatic_shaper') === 'true';
+        body.restricted_protocols = String(data.get('restricted_protocols') || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+        body.allowlist = String(data.get('allowlist') || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+        await request('/analysis/policy', { method: 'PUT', body });
+        closeDialog(); toast('Настройки сохранены'); await loadPage();
+      }); return;
+    }
+    if (action === 'cancel-shaper') {
+      await request(`/analysis/shaper/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      toast('Снятие запрошено. Нода подтвердит удаление ограничения.'); await loadPage(); return;
+    }
     if (action === 'new-config' || action === 'edit-config') { await editConfig(kind, id); return; }
-    if (action === 'config-mode') { setConfigMode(button.dataset.mode); return; }
     if (action === 'delete-config') { confirmAction('Удалить запись', `Удалить ${id} из реестра ${pages[kind][0]}?`, async () => { await request(`/${kind}/${encodeURIComponent(id)}`, { method: 'DELETE' }); toast('Запись удалена'); await loadPage(); }, 'Удалить'); return; }
     if (action === 'enrollment') { enrollmentDialog(); return; }
     if (action === 'agent-diagnostics') { diagnosticsDialog(id); return; }
@@ -910,10 +870,11 @@
     if (field.dataset.filter !== 'q') return;
     filters().offset = 0;
     clearTimeout(state.searchTimer);
-    if (['live', 'agents', 'audit'].includes(state.route)) { renderPage(); return; }
+    if (['live', 'agents', 'audit', 'incidents'].includes(state.route)) { renderPage(); return; }
     state.searchTimer = setTimeout(() => loadPage(), 300);
   });
   document.addEventListener('change', event => {
+    if (event.target.dataset.filter === 'status') { renderPage(); return; }
     if (event.target.dataset.filter === 'minutes') { filters().minutes = event.target.value; loadPage(); }
   });
   document.addEventListener('keydown', event => {
@@ -939,7 +900,7 @@
 
   function renderLogin(message = '') {
     document.title = 'Вход · SubGate';
-    app.innerHTML = `<main class="login"><section class="login-story"><div class="brand"><span class="logo-mark">S</span>SubGate</div><div class="eyebrow">Infrastructure operations</div><h1>Ваша инфраструктура.<br><span>Полная картина.</span></h1><p>Шлюз подписок, флот нод и телеметрия Xray в одной консоли управления.</p><small>Remnawave · Xray · SubGate Core</small></section><section class="login-form-area"><form id="login-form"><h2>Войти в консоль</h2><p>Используйте аккаунт администратора SubGate.</p>${message ? `<div class="notice error" role="alert">${esc(message)}</div>` : ''}<label>Имя пользователя<input name="username" id="login-username" autocomplete="username" maxlength="128" required autofocus></label><label>Пароль<input name="password" type="password" autocomplete="current-password" maxlength="1024" required></label><div id="login-error" class="notice error" role="alert" hidden></div><button type="submit" class="primary">Войти ${icon('arrow')}</button><div class="demo-hint" id="demo-login-hint" hidden>Demo: admin / subgate-demo</div></form></section></main>`;
+    app.innerHTML = `<main class="login"><section class="login-story"><div class="brand"><span class="logo-mark">S</span>SubGate</div><div class="eyebrow">Infrastructure operations</div><h1>Ваша инфраструктура.<br><span>Полная картина.</span></h1><p>Состояние нод, телеметрия Xray и объяснимые наблюдения для ежедневного разбора активности.</p><small>Remnawave · Xray · SubGate Core</small></section><section class="login-form-area"><form id="login-form"><h2>Войти в консоль</h2><p>Используйте аккаунт администратора SubGate.</p>${message ? `<div class="notice error" role="alert">${esc(message)}</div>` : ''}<label>Имя пользователя<input name="username" id="login-username" autocomplete="username" maxlength="128" required autofocus></label><label>Пароль<input name="password" type="password" autocomplete="current-password" maxlength="1024" required></label><div id="login-error" class="notice error" role="alert" hidden></div><button type="submit" class="primary">Войти ${icon('arrow')}</button><div class="demo-hint" id="demo-login-hint" hidden>Demo: admin / subgate-demo</div></form></section></main>`;
     $('#login-form').addEventListener('submit', async event => {
       event.preventDefault();
       const form = event.currentTarget;
