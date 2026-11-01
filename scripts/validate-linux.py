@@ -106,7 +106,8 @@ class Validation:
     def login(self):
         self.jar.clear()
         result = self.request("POST", "/api/v1/auth/login", {"username": "admin", "password": "subgate-demo"})
-        assert result["role"] == "superadmin"
+        assert result["username"] == "admin"
+        assert self.request("GET", "/api/v1/auth/me")["id"] == result["id"]
 
     def start_agent(self, stats_address=None):
         self.agent = self.launch("agent", [

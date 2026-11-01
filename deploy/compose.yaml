@@ -11,7 +11,7 @@ services:
       SUBGATE_DATABASE_URL: "file:/data/subgate.db"
       SUBGATE_BACKUP_PATH: /data/backups
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:${SUBGATE_CORE_PORT:-8080}:8080"
     volumes:
       - core-data:/data
     read_only: true

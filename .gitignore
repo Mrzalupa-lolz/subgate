@@ -28,6 +28,7 @@ vendor/
 *~
 .DS_Store
 .editor*
+!.editorconfig
 tags
 TAGS
 cscope.*
@@ -45,12 +46,14 @@ test/bench/results/
 .env
 .env.local
 .env*
+!.env.example
 *.key
 *.pem
 secrets/
 *.sgb
 deploy/core.env
 deploy/agent.env
+deploy/.proxy-mode
 deploy/docker-compose.override.yml
 
 # Database & state
@@ -67,6 +70,8 @@ data/
 # Logs
 *.log
 logs/
+# Keep the Go log classifier source directory.
+!/core/internal/logs/
 
 # Temporary
 tmp/
@@ -80,7 +85,7 @@ __pycache__/
 
 # Frontend build
 web/dist/
-web/node_modules/
+node_modules/
 web/.next/
 web/out/
 

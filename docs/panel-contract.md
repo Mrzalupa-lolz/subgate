@@ -1,43 +1,53 @@
-# Матрица Remnawave 3.4.5 и план generated client
+# Контракт Remnawave
 
-Источник: schema `remnawave-openapi.json` + наблюдённый GET /api/tokens/scopes на отдельной test panel 3.4.5 (2026-10-14). Имена scopes не выводились из предположений. Production GET-only default; panel.allow_writes включать только по разрешению записи.
+Опорная схема — [remnawave-openapi.json](../remnawave-openapi.json), версия 3.4.5. Core использует API-токен, по умолчанию разрешает только GET, запрещает redirects и ограничивает ответ 16 MiB. Наличие метода в OpenAPI не означает, что соответствующая функция подключена в SubGate.
 
-| Область | Метод/endpoint по схеме | Минимальный scope | Ограничение |
-|---|---|---|---|
-| users | `GET /api/users` | `users:list` | read-only |
-| users | `GET /api/users/by-short-uuid/{shortUuid}` | `users:by-short-uuid` | read-only |
-| users | `GET /api/users/{userId}` | `users:by-id` | read-only |
-| users | `POST /api/users/{userId}/actions/revoke` | `users:revoke-subscription` | test panel only; явное подтверждение операции и audit |
-| users | `POST /api/users/{userId}/actions/disable` | `users:disable` | test panel only; явное подтверждение операции и audit |
-| users | `POST /api/users/{userId}/actions/enable` | `users:enable` | test panel only; явное подтверждение операции и audit |
-| users | `POST /api/users/{userId}/actions/reset-traffic` | `users:reset-traffic` | test panel only; явное подтверждение операции и audit |
-| nodes | `GET /api/nodes` | `nodes:list` | read-only |
-| nodes | `POST /api/nodes/{uuid}/actions/enable` | `nodes:enable` | test panel only; явное подтверждение операции и audit |
-| nodes | `POST /api/nodes/{uuid}/actions/disable` | `nodes:disable` | test panel only; явное подтверждение операции и audit |
-| nodes | `POST /api/nodes/{uuid}/actions/restart` | `nodes:restart` | test panel only; явное подтверждение операции и audit |
-| config-profiles | `GET /api/config-profiles` | `config-profiles:list` | read-only |
-| config-profiles | `PATCH /api/config-profiles` | `config-profiles:update` | test panel only; явное подтверждение операции и audit |
-| hosts | `PATCH /api/hosts` | `hosts:update` | test panel only; явное подтверждение операции и audit |
-| hosts | `GET /api/hosts` | `hosts:list` | read-only |
-| hosts | `POST /api/hosts/bulk/disable` | `hosts:bulk-disable` | test panel only; явное подтверждение операции и audit |
-| hosts | `POST /api/hosts/bulk/enable` | `hosts:bulk-enable` | test panel only; явное подтверждение операции и audit |
+## Используемые методы
 
-Admin-only /api/tokens (создание ключа) не доступен Core через API-token: оператор создаёт scoped key в панели. Test provisioning использует временный admin JWT с browser header; Core не получает пароль администратора панели.
+| Метод и путь панели | Назначение | Минимальный scope |
+| --- | --- | --- |
+| `GET /api/users` | Синхронизация аккаунтов: start/size, response.users/total, UUID/id, shortUuid, username, status и traffic counters | `users:list` |
+| `GET /api/users/{userId}` | Reader отдельного аккаунта; userId в схеме числовой | `users:by-id` |
+| `GET /api/users/by-short-uuid/{shortUuid}` | Reader по short UUID | `users:by-short-uuid` |
+| `GET /api/nodes` | Ноды, адреса, состояния и configProfile.activeInbounds | `nodes:list` |
+| `GET /api/hosts` | Связь хостов с нодами | `hosts:list` |
+| `GET /api/system/stats/recap` | Версия панели из response.version | Проверить доступ токена на целевой панели |
+| `POST /api/nodes/{uuid}/actions/enable` | Включение ноды через node action | `nodes:enable` |
+| `POST /api/nodes/{uuid}/actions/disable` | Отключение ноды через node action | `nodes:disable` |
+| `POST /api/nodes/{uuid}/actions/restart` | Перезапуск ноды через node action | `nodes:restart` |
 
-Генерация: pinned ogen v1.24.0. R03 первый проход — GET /api/users и его response DTOs, выделенные программно без изменения схемы; checked-in генерация и drift-check. Остальные endpoints добавлять по одному после tests. R04 version: GET /api/system/stats/recap (response.version). Не считать DTO/генератор полным внедрением panel-native workflow.
+Имена scopes ранее наблюдались на отдельной тестовой панели 3.4.5 (2026-10-14). Это не свежая проверка токена рабочей панели. Оператор создаёт scoped key в Remnawave; Core не получает пароль администратора и не создаёт ключи через admin-only `/api/tokens`.
 
-R03 reader projection: только start/size и response200. Ogen v1.24.0 не поддержал nested optional filters и same-type error oneOf; ошибки HTTP остаются в Request. У user required остаются shortUuid/username/status/trafficLimitBytes/expireAt/userTraffic, у userTraffic — usedTrafficBytes. Остальные metadata optional, но present types/formats декодируются generated DTO. id optional только для совместимости старого UUID identity; отсутствие обоих ID отвергается. Unknown enums читаются без writer Validate. Исходный OpenAPI не изменяется.
+В HTTP API Core также есть node action `reset-traffic`; точный контракт и права проверяйте отдельно на тестовой панели. Node actions используют общий клиент: наличие route не подтверждает завершённый workflow, итоговый аудит и проверку каждой операции. Доступ на запись требует явного `panel.allow_writes`; development-проверки записи выполняются отдельно от production.
 
-Нормализация по исходным байтам через encoding/json сохраняет точные int64 traffic counters и UUID precedence независимо от metadata. Поэтому zero-reflection всего клиента пока не достигнут: F-023 PARTIAL. Generated HTTP client пока не используется (strict enum writer validation); подключён generated response decoder GET /api/users.
+Пользовательские mutations и выдача подписок переданы middleware. Панельные `/api/sub/...`, HWID, request history, squads и billing не являются подключёнными функциями мониторинга SubGate.
 
-Проверено 2026-10-14: TestGeneratedPanelUsersContract и TestGeneratedPanelUsersIntegrity PASS, четыре security findings воспроизведены RED и исправлены GREEN; drift-check PASS; make check PASS. Opt-in TestLivePanelReadContract PASS на отдельной synthetic panel3.4.5; обычный offline run SKIP этого opt-in теста не считается live PASS. Coverage handwritten panel package80.6%. Остальные generated endpoints — следующие проходы R03, полного покрытия нет.
+## Синхронизация и версия
 
-| Компонент | Версия контракта | Проверка |
-|---|---|---|
-| Panel / generated users reader | 3.4.5 | TestLivePanelReadContract PASS; generated.SpecVersion из info.version, drift PASS |
-| Test remnanode | 3.4.2 | test GET /api/nodes сообщил версию |
-| Test Xray | 26.7.28 | test GET /api/nodes сообщил версию; live StatsService отдельно не закрыт |
+Снимок users/nodes/hosts публикуется атомарно; неудачный sync сохраняет последний успешный. HMAC вебхука проверяется по исходному body, replay marker и обновление пользователя сохраняются вместе. Применение `user.updated` покрыто тестами; для остальных типов нужны отдельные projection-проверки.
 
-R04: при старте GET /api/system/stats/recap с бюджетом3s сравнивает response.version с generated.SpecVersion. Несовпадение предупреждается в журнале; ошибка/нет scope показываются как unavailable без данных ответа. GET /api/v1/system/status возвращает panel_version={expected,actual,state}; state: not_checked, compatible, mismatch, unavailable. Непроверенные версии не считаются совместимыми. Диагностика не запрещает sync/subscriptions. TestPanelVersionMismatch RED→GREEN и make check PASS2026-10-14; security review без findings.
+При старте Core запрашивает recap с бюджетом 3 секунды и сравнивает версию с `generated.SpecVersion`. `/api/v1/system/status` содержит `panel_version={expected,actual,state}`: `not_checked`, `compatible`, `mismatch`, `unavailable`. Ошибка или отсутствие scope не раскрывают response body и не останавливают мониторинг.
 
-С 2026-10-31 пользовательские mutations выполняет middleware; таблица scopes выше остаётся справочником API панели. SubGate сохраняет только node actions.
+## Сгенерированный reader
+
+Генератор — ogen v1.24.0. В runtime подключён generated response decoder `GET /api/users`; HTTP-клиент и другие readers остаются ручными. Полное покрытие OpenAPI и zero-reflection не заявляются.
+
+Projection содержит start/size и response200. Nested optional filters и same-type error oneOf не вошли из-за ограничений генератора; HTTP errors обрабатывает ручной Request. Unknown enums читаются без writer Validate. Отдельная нормализация исходных JSON-байтов сохраняет точные int64 counters и приоритет UUID. Отсутствие обоих идентификаторов отвергается; present optional metadata проверяются на тип/формат. Исходная схема не меняется.
+
+```bash
+python3 scripts/generate-panel.py --check
+go test ./core/internal/panel -count=1
+```
+
+Проверки `TestGeneratedPanelUsersContract`, `TestGeneratedPanelUsersIntegrity`, `TestPanelReadOnlyRejectsBeforeSending`, `TestPanelVersionMismatch` проверяют части контракта. Live-сценарии и границы сохранённых результатов описаны в [DEVELOPMENT.md](DEVELOPMENT.md).
+
+## Будущий Xray-редактор
+
+Редактор пока не реализован. Для него нужны `GET /api/config-profiles`, `GET /api/config-profiles/{uuid}`, при необходимости computed-config и `PATCH /api/config-profiles` с UUID в body. Это не `PATCH /api/config-profiles/{uuid}`. Scopes списка/обновления — `config-profiles:list` и `config-profiles:update`.
+
+Перед реализацией извлеките точный path и DTO из схемы. Computed-config не заменяет проверку конфига. Нужны подтверждение применения, итоговый аудит, version conflict/rollback и проверка записи в отдельной панели.
+
+```bash
+jq '.paths["/api/config-profiles"].patch' remnawave-openapi.json
+jq '.components.schemas.UpdateConfigProfileBodyDto' remnawave-openapi.json
+```

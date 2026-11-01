@@ -7,6 +7,7 @@ services:
     environment:
       SUBGATE_CORE_URL: "${SUBGATE_CORE_URL:?Set a Core HTTPS URL}"
       NODE_ID: "${NODE_ID:?Set the panel node UUID}"
+      XRAY_STATS_ADDR: "${XRAY_STATS_ADDR:-auto}"
     command:
       - -token-file
       - /data/token
@@ -16,6 +17,14 @@ services:
       - "${XRAY_STATS_ADDR:-auto}"
       - -access-log
       - /xray-log/access.log
+      - -health-file
+      - /tmp/subgate-heartbeat
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/subgate-agent", "health", "-health-file", "/tmp/subgate-heartbeat"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 9
     volumes:
       - agent-data:/data
       - "${XRAY_LOG_DIR:-/var/log/remnanode}:/xray-log:ro"

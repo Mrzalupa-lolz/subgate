@@ -6,20 +6,22 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"syscall"
 
 	"github.com/subgate/subgate/agent/internal/agent"
 	"github.com/subgate/subgate/agent/internal/enrollment"
+	"github.com/subgate/subgate/agent/internal/preflight"
 )
 
 var version = "0.2.0"
 
 func main() {
 	enroll := len(os.Args) > 1 && os.Args[1] == "enroll"
+	check := len(os.Args) > 1 && os.Args[1] == "check"
+	health := len(os.Args) > 1 && os.Args[1] == "health"
 	args := os.Args[1:]
-	if enroll {
+	if enroll || check || health {
 		args = args[1:]
 	}
 	flags := flag.NewFlagSet("subgate-agent", flag.ExitOnError)
@@ -32,24 +34,34 @@ func main() {
 	logFile := flags.String("access-log", "", "Xray access.log path (must contain email field)")
 	spoolFile := flags.String("spool-file", "data/pending.sgb", "Encrypted pending telemetry file (empty disables persistence)")
 	showVersion := flags.Bool("version", false, "Print version")
+	healthFile := flags.String("health-file", "", "Write readiness after successful heartbeats (health subcommand reads it)")
 	_ = flags.Parse(args)
 	if *showVersion {
 		fmt.Println(version)
 		return
 	}
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	if health {
+		if err := agent.CheckHeartbeat(*healthFile); err != nil {
+			logger.Error("agent not ready", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if check {
+		if err := preflight.Check(*core, *stats, *logFile, *tokenFile, logger); err != nil {
+			logger.Error("preflight failed; enrollment not attempted", "error", err)
+			os.Exit(1)
+		}
+		logger.Info("Core, access.log, credential volume and Xray StatsService OK")
+		return
+	}
 	if enroll {
 		if *bootstrap == "" || *node == "" {
 			logger.Error("enrollment-token and node-id are required")
 			os.Exit(1)
 		}
-		raw, err := enrollment.Enroll(*core, *bootstrap, *node)
-		if err == nil {
-			err = os.MkdirAll(filepath.Dir(*tokenFile), 0700)
-		}
-		if err == nil {
-			err = os.WriteFile(*tokenFile, []byte(raw), 0600)
-		}
+		err := enrollment.EnrollToFile(*core, *bootstrap, *node, *tokenFile)
 		if err != nil {
 			logger.Error("enrollment failed", "error", err)
 			os.Exit(1)
@@ -63,7 +75,7 @@ func main() {
 			*secret = strings.TrimSpace(string(raw))
 		}
 	}
-	instance, err := agent.NewAgent(&agent.Config{CoreAddress: *core, NodeID: *node, Token: *secret, StatsAddress: *stats, AccessLog: *logFile, SpoolFile: *spoolFile, Logger: logger})
+	instance, err := agent.NewAgent(&agent.Config{CoreAddress: *core, NodeID: *node, Token: *secret, StatsAddress: *stats, AccessLog: *logFile, SpoolFile: *spoolFile, HealthFile: *healthFile, Logger: logger})
 	if err != nil {
 		logger.Error("agent configuration failed", "error", err)
 		os.Exit(1)

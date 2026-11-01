@@ -4,7 +4,7 @@ BIN_DIR ?= bin
 IMAGE_PREFIX ?= subgate
 LDFLAGS := -s -w -X main.version=$(VERSION)
 
-.PHONY: help build build-core build-agent build-worker build-ndpi test test-race vet lint check smoke demo docker bench clean
+.PHONY: help build build-core build-agent build-worker build-ndpi test test-race test-deploy vet lint check smoke demo docker bench clean
 
 help:
 	@echo "build  Build Core and Agent"
@@ -33,8 +33,12 @@ lint:
 	node --check web/app.js
 	bash -n deploy/install.sh
 	bash -n deploy/install-agent.sh
+	bash -n deploy/install-core.sh
+	bash scripts/test-core-installer.sh
 	bash scripts/test-agent-installer.sh
 check: test test-race vet lint build
+test-deploy: docker
+	python3 scripts/test-containers.py
 smoke: build
 	python3 scripts/validate-linux.py --bin-dir $(BIN_DIR) --stats-address 127.0.0.1:1
 demo:

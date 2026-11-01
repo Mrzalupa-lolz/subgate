@@ -15,6 +15,7 @@ import (
 
 	"github.com/subgate/subgate/core/internal/config"
 	"github.com/subgate/subgate/core/internal/db"
+	"github.com/subgate/subgate/core/internal/panel"
 	"github.com/subgate/subgate/core/internal/server"
 )
 
@@ -27,6 +28,7 @@ func main() {
 	listen := flag.String("listen", "", "Override listen address")
 	databasePath := flag.String("database", "", "Override SQLite DSN")
 	showVersion := flag.Bool("version", false, "Print version")
+	check := flag.Bool("check", false, "Validate configuration and read-only panel access, without opening the database or starting Core")
 	restore := flag.String("restore", "", "Decrypt a .sgb backup offline")
 	keyFile := flag.String("key-file", "", "Original subgate.key for backup restoration")
 	output := flag.String("output", "", "New database path for restoration (must not exist)")
@@ -67,6 +69,28 @@ func main() {
 	if err = cfg.Validate(); err != nil {
 		logger.Error("invalid configuration", "error", err)
 		os.Exit(1)
+	}
+	if *check {
+		if !cfg.Demo {
+			if !strings.HasPrefix(cfg.HTTP.PublicURL, "https://") || strings.Contains(cfg.HTTP.PublicURL, "subgate.example.com") ||
+				strings.HasPrefix(cfg.Panel.APIToken, "replace-with") || strings.HasPrefix(cfg.Auth.AdminPassword, "replace-with") ||
+				len(cfg.Auth.AdminPassword) < 12 {
+				logger.Error("set a real HTTPS public URL, panel token and admin password of at least 12 characters")
+				os.Exit(1)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			client := panel.NewClient(cfg.Panel.URL, cfg.Panel.APIToken, logger)
+			if _, err = client.ListNodesContext(ctx); err == nil {
+				_, _, err = client.ListUsersContext(ctx, 0, 1)
+			}
+			if err != nil {
+				logger.Error("panel preflight failed; check URL, API token and read access to nodes/users", "error", err)
+				os.Exit(1)
+			}
+		}
+		logger.Info("configuration and panel access OK; database untouched")
+		return
 	}
 	database, err := db.New(cfg.Database.URL)
 	if err != nil {

@@ -28,6 +28,7 @@ import (
 )
 
 type Config struct {
+	HealthFile                                                     string
 	CoreAddress, NodeID, Token, StatsAddress, AccessLog, SpoolFile string
 	Logger                                                         *slog.Logger
 }
@@ -686,6 +687,12 @@ func (a *Agent) deliveryLoop(queue <-chan queuedTelemetry, result chan<- error) 
 }
 
 func (a *Agent) Start() error {
+	if a.config.HealthFile != "" {
+		if err := os.Remove(a.config.HealthFile); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("reset heartbeat health file: %w", err)
+		}
+		defer os.Remove(a.config.HealthFile)
+	}
 	defer a.stats.Close()
 	defer a.client.CloseIdleConnections()
 	defer func() { a.cancel(); a.wg.Wait() }()
@@ -771,6 +778,10 @@ func (a *Agent) heartbeatLoop() {
 		h := wire.Heartbeat{NodeID: a.config.NodeID, Version: "0.2.0", Timestamp: time.Now(), MemoryMB: int(m.Alloc >> 20), UptimeSeconds: int64(time.Since(a.started).Seconds()), StatsError: statsError, LogsError: logsError, DroppedEvents: dropped, StatsIntervalMS: statsIntervalMS, StatsQueryMS: statsQueryMS, StatsUsers: statsUsers, StatsScope: statsScope, PendingBatches: pendingBatches}
 		if err := a.send("/api/v1/agents/heartbeat", h); err != nil {
 			a.config.Logger.Warn("heartbeat failed", "error", err)
+		} else if a.config.HealthFile != "" {
+			if err := writeHeartbeat(a.config.HealthFile); err != nil {
+				a.config.Logger.Warn("write heartbeat health file failed", "error", err)
+			}
 		}
 		select {
 		case <-a.ctx.Done():

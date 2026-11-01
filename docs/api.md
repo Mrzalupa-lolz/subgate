@@ -1,6 +1,6 @@
 # Core HTTP API (кодовая версия 0.2.0)
 
-Справочник сверён с `Server.routes`; дублирующие функции переданы middleware 2026-10-31. Это описание существующего API, не заявление о готовности всех требований. Исторические критерии — [архив PROJECT_PLAN.md](_archive/triage-2026-10-30/docs/PROJECT_PLAN.md). Полный runtime каждого endpoint отдельно не проверен.
+Справочник сверён с `Server.routes`; дублирующие функции переданы middleware 2026-10-31. Это описание существующего API, не заявление о готовности всех требований. Назначение и границы — [архитектура](ARCHITECTURE.md). Полный runtime каждого endpoint отдельно не проверен.
 
 Responses are JSON unless stated otherwise. Errors use `{"error":"message"}` with a suitable HTTP status. The API prefix is `/api/v1`. The console uses these same endpoints.
 
@@ -73,7 +73,7 @@ GET `/quotas` lists quota rules; PUT/DELETE require `/quotas/{id}`. Settings hav
 
 The injection API (`/injections`, `/injections/{id}`) and user action API (`POST /users/{id}/actions/{action}`) are no longer registered. Authenticated requests return 404. Existing injection data stays in SQLite and is ignored. Users remain readable for telemetry identity lookup; node actions remain available. Subscription routes, request-signals, tiers/policies/pins are also unregistered and return 404. No subscription upstream is configured.
 
-Original implementation, tests and documentation: [archive](../_archive/middleware-overlap-2026-10-31/README.md). See [ownership and integration](middleware-integration.md). PHP middleware has different configuration formats; this change does not migrate saved rules or deploy middleware.
+Original implementation, tests and documentation: [archive](../_archive/middleware-overlap-2026-10-31/README.md). See [ownership and integration](ARCHITECTURE.md#граница-с-middleware). PHP middleware has different configuration formats; this change does not migrate saved rules or deploy middleware.
 
 Live rows expose EMA3/10, recent average/peak/p95, delta bytes, 24-hour usage totals, interval/age, gap/warming/coarse fields. Top-level fields: `data`, `generated_at`, `sample_interval_ms`, `window_seconds`. The in-memory distribution uses at most 12 samples, not a guaranteed one-minute window. History `from`/`to` accept RFC3339 or Unix seconds/milliseconds; the ordered range is at most 31 days and reads at most 200000 rows. Raw speed is cleaned after 24 hours, so a 31-day request does not guarantee 31 days of data. Buckets are computed during reads, not durable rollup tiers.
 
@@ -116,9 +116,9 @@ Activity queries, exports, and purge accept a synchronized panel ID, username, e
 Agent's encrypted pending spool defaults to `data/pending.sgb` (`-spool-file`). It retains the same batch ID across retries/restarts, limits each batch to 5000 samples/1000 events/2 MiB, and bounds pending telemetry to 16 MiB. Permanent validation 4xx responses discard the rejected batch and count lost items; 408/429/5xx and network errors retain it for retry. 401/403 stop the Agent and preserve pending telemetry. Re-enrollment changes the encryption key, so archive/remove the old spool before starting with the new token. Diagnostics report discarded or expired telemetry; logs waiting in the in-memory channel are not yet durable.
 
 ## Health, transport и ключи
-Текущий health/quorum/maintenance контракт: [health](registry/health.md).
+Текущий health/quorum/maintenance контракт: [health](ARCHITECTURE.md#проверки-доступности).
 Sanitized inbound descriptors и verified levels (tcp/tls/ws/httpupgrade/grpc/xhttp-options/xhttp-h3-options):
-[transports](registry/transports.md). Transport acceptance не доказывает proxy-user authentication.
+[transports](ARCHITECTURE.md#проверки-доступности). Transport acceptance не доказывает proxy-user authentication.
 
 Agent-token GET /api/v1/agents/health-targets возвращает synchronized targets (max64,16 inbounds/node).
 PUT /api/v1/agents/health-results принимает max64 результатов без повторов target, source берётся из credential.
@@ -126,11 +126,11 @@ PUT /api/v1/agents/health-results принимает max64 результато�
 oversize fleet health-targets503. Свежесть90s/future5s, legacy completed_at использует receive time.
 Core принимает только votes, применимые к текущему target; legacy TCP failures не дают quorum для H3-only.
 Точные optional wire fields: [wire.go](../pkg/wire/wire.go).
-Исторические health fixture failures исправлены; текущие проверки — [MONITORING_VALIDATION](MONITORING_VALIDATION.md).
+Исторические health fixture failures исправлены; текущие проверки — [сохранённые результаты](DEVELOPMENT.md#последние-сохранённые-результаты).
 
 Storage rollover: storage.encryption_key_file/SUBGATE_STORAGE_KEY_FILE и previous_encryption_key_files/
 SUBGATE_PREVIOUS_STORAGE_KEY_FILES (до8previous), restart required. Regular private32raw-byte key, no symlink/FIFO.
 Старые данные не re-encrypt автоматически; restore принимает original backup key.
-Retention/activity policy: [activity](registry/activity.md); audit/key safety: [security](registry/security.md).
+Retention/activity policy: [данные и хранение](ARCHITECTURE.md#данные-и-безопасность); audit/key safety: [безопасность](ARCHITECTURE.md#данные-и-безопасность).
 
 Geo-rule endpoints and subscription denial by geography or scanner signals were removed on 2026-11-01. Existing stored geo rules remain inert. IP intelligence and Xray activity monitoring remain available.
