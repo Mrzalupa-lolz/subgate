@@ -20,8 +20,9 @@ go vet ./...
 go test ./...
 make check
 python3 scripts/check-docs.py
-python3 scripts/generate-panel.py --check
 ```
+
+Тесты запускаются на Linux (в CI — Ubuntu). Сборка `core/internal/server` на Windows не проходит намеренно (`syscall.O_NOFOLLOW`); `go test ./...` через WSL работает. Контракт панели проверяется синтетическими фикстурами 3.4.8 (`core/internal/panel/testdata/`), сверка панельной схемы и генерация клиента не используются. Шаг CI «Panel generation and schema drift» заменён на `python3 scripts/check-docs.py`.
 
 `make check` выполняет test, race, vet, проверку gofmt и JavaScript/Bash, сценарии установщиков, затем сборку Core/Agent. Он рассчитан на Linux. `make build` создаёт `bin/subgate-core` и `bin/subgate-agent`; worker и native nDPI собираются отдельно через `make build-worker build-ndpi`.
 
@@ -42,7 +43,6 @@ python3 scripts/generate-panel.py --check
 | `SUBGATE_SYNTHETIC_PANEL_URL`, `SUBGATE_SYNTHETIC_PANEL_TOKEN` | Контракт отдельной тестовой панели |
 | `SUBGATE_SYNTHETIC_XRAY_BINARY` | Транспорты изолированного Xray |
 | `SUBGATE_TEST_XRAY_SERVER` | Реальный Xray StatsService |
-| `SUBGATE_RUN_NGINX_FALLBACK=1` | Docker/Nginx-сценарий отказа Core |
 | `SUBGATE_TEST_TC_NETNS=1` | TC/TBF и снятие ограничения в отдельном Linux network namespace |
 
 Отсутствие окружения приводит к SKIP. Успешный общий suite с пропусками не подтверждает live-интеграцию. Parent PASS со всеми пропущенными дочерними сценариями тоже не является её проверкой.
@@ -53,7 +53,7 @@ python3 scripts/generate-panel.py --check
 
 Это сведения из проверки реализации от **2026-11-01**, а не результат каждого последующего запуска. Свежие изменения требуют своих проверок.
 
-- Ubuntu/WSL, Go 1.26: полный `go test ./... -count=1`, `go vet ./...`, полный race-прогон, `make build build-worker` и `make lint` прошли. Health/maintenance fixtures исправлены добавлением нод в synced registry.
+- Ubuntu/WSL, Go 1.26: полный `go test ./... -count=1`, `go vet ./...`, полный race-прогон, `make build build-worker` и `make lint` прошли. Результаты относятся к прежнему набору проверок; health/quorum/maintenance с тех пор удалены из кода.
 - Сценарии анализа проверяли дедупликацию, перезапуск, rollback вместе с аудитом, качество источников, отклонение неоднозначной атрибуции и полный путь ingest → команда → результат → отмена → снятие.
 - TC/TBF проверен на настоящем ядре в изолированном namespace с veth: установка в обоих направлениях и снятие после TTL. Это не замер throughput рабочей ноды.
 - Native-коллектор собран с `-Wall -Wextra -Werror` против nDPI 4.14.0 и 4.2.0. Синтетический корпус включает IPv4/IPv6 BitTorrent, HTTP, STUN/WebRTC, Source Engine UDP, неизвестный шифротекст, обрезанные пакеты и повторное использование TCP tuple. BitTorrent в 4.2 имеет guessed confidence и не допускается для автоматики. Проверен allowlist полей stdout без payload/IP/SNI/infohash/URL.

@@ -68,19 +68,17 @@ func remoteIP(r *http.Request) string {
 	}
 	return r.RemoteAddr
 }
-func (s *Server) login(w http.ResponseWriter, r *http.Request) {
-	if !s.validOrigin(r) {
-		fail(w, 403, "invalid request origin")
-		return
-	}
-	ip := s.clientIP(r)
+
+// allowAttempt counts unauthenticated attempts per key in one-minute windows.
+func (s *Server) allowAttempt(key string, limit int) bool {
 	s.loginMu.Lock()
-	a := s.attempts[ip]
+	defer s.loginMu.Unlock()
+	a := s.attempts[key]
 	if time.Since(a.start) > time.Minute {
 		a = attempt{start: time.Now()}
 	}
 	a.count++
-	s.attempts[ip] = a
+	s.attempts[key] = a
 	if len(s.attempts) > 10000 {
 		for k, v := range s.attempts {
 			if time.Since(v.start) > time.Minute {
@@ -88,8 +86,15 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	s.loginMu.Unlock()
-	if a.count > s.config.Auth.LoginRateLimit {
+	return a.count <= limit
+}
+
+func (s *Server) login(w http.ResponseWriter, r *http.Request) {
+	if !s.validOrigin(r) {
+		fail(w, 403, "invalid request origin")
+		return
+	}
+	if !s.allowAttempt("login:"+s.clientIP(r), s.config.Auth.LoginRateLimit) {
 		w.Header().Set("Retry-After", "60")
 		fail(w, 429, "too many login attempts")
 		return
@@ -228,4 +233,17 @@ func (s *Server) auditTx(tx *sql.Tx, r *http.Request, p *principal, action, reso
 	}
 	_, err := tx.Exec("INSERT INTO audit_log(admin_id,action,resource,resource_id,status,ip_address) VALUES(?,?,?,?,?,?)", adminID, action, resource, id, status, s.clientIP(r))
 	return err
+}
+
+// metricsEndpoint serves Prometheus metrics to a scraper holding the
+// configured bearer token, or to an authenticated owner session.
+func (s *Server) metricsEndpoint(w http.ResponseWriter, r *http.Request) {
+	serve := s.metrics.Handler()
+	if token := s.config.HTTP.MetricsToken; token != "" {
+		if subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), []byte("Bearer "+token)) == 1 {
+			serve.ServeHTTP(w, r)
+			return
+		}
+	}
+	s.authenticate(serve).ServeHTTP(w, r)
 }

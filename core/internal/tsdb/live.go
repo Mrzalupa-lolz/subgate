@@ -112,6 +112,11 @@ func (l *LiveStore) Snapshot(now time.Time) []LiveSample {
 			continue
 		}
 		freshFor := max(int64(3000), e.Sample.IntervalMS*2+500)
+		if e.Sample.UplinkBps == 0 && e.Sample.DownlinkBps == 0 {
+			// Agents report idle series only every few seconds; a zero value
+			// does not go stale within the 15 s live horizon.
+			freshFor = 15000
+		}
 		status := "live"
 		if age > freshFor || e.Sample.Gap {
 			status = "gap"

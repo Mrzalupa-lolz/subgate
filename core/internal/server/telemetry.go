@@ -46,7 +46,17 @@ func (s *Server) createEnrollment(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, 201, map[string]any{"token": raw, "node_id": input.NodeID, "expires_at": expiry})
 }
+
+// enrollAttemptsPerMinute bounds unauthenticated enrollment attempts per IP;
+// each attempt takes the database write lock.
+const enrollAttemptsPerMinute = 10
+
 func (s *Server) enroll(w http.ResponseWriter, r *http.Request) {
+	if !s.allowAttempt("enroll:"+s.clientIP(r), enrollAttemptsPerMinute) {
+		w.Header().Set("Retry-After", "60")
+		fail(w, 429, "too many enrollment attempts")
+		return
+	}
 	var input struct {
 		NodeID string `json:"node_id"`
 		Token  string `json:"token"`
@@ -293,6 +303,10 @@ type activityRow struct {
 	wire.Activity
 }
 
+// activityDomainScanLimit bounds how many journal rows one domain search
+// decrypts.
+const activityDomainScanLimit = 100000
+
 func (s *Server) queryActivity(f activityFilters) ([]activityRow, error) {
 	query := "SELECT id,node_id,user_id,payload FROM sg_activity WHERE 1=1"
 	args := []any{}
@@ -319,8 +333,15 @@ func (s *Server) queryActivity(f activityFilters) ([]activityRow, error) {
 			args = append(args, t.UnixMilli())
 		}
 	}
+	// Destinations are encrypted, so a domain filter is applied after
+	// decryption. Scan newest rows until Limit matches are found instead of
+	// filtering only the newest Limit rows.
+	scan := f.Limit
+	if f.Domain != "" {
+		scan = activityDomainScanLimit
+	}
 	query += " ORDER BY timestamp DESC LIMIT ?"
-	args = append(args, f.Limit)
+	args = append(args, scan)
 	rows, err := s.db.Query(query, args...)
 	if err != nil {
 		return nil, err
@@ -344,6 +365,9 @@ func (s *Server) queryActivity(f activityFilters) ([]activityRow, error) {
 		domain := f.Domain
 		if domain == "" || strings.Contains(strings.ToLower(item.DstHost), domain) {
 			data = append(data, item)
+			if len(data) >= f.Limit {
+				break
+			}
 		}
 	}
 	return data, rows.Err()

@@ -116,5 +116,8 @@ docs/*.md~
 *.generated.go
 token_report.md
 
-# Local API specification
+# Local copy of the Remnawave OpenAPI schema (reference only, not used by tests)
 /remnawave-openapi.json
+
+# Independent project checked out next to SubGate; deployed separately
+/remnawave-subscription-middleware/

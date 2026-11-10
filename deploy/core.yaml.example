@@ -15,11 +15,8 @@ panel:
   allow_writes: false
   url: https://panel.example.com
   api_token: replace-with-a-scoped-remnawave-api-token
-  # See docs/ARCHITECTURE.md for middleware/routing topology.
   timeout: 15s
   sync_interval: 1m
-  webhook_path: /webhook/panel
-  webhook_key: replace-with-a-separate-webhook-secret
 auth:
   admin_username: admin
   admin_password: replace-with-a-long-unique-password

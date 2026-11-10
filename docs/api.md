@@ -18,11 +18,11 @@ Activity reads (`activity.read`) and exports (`activity.export`) record final su
 |---|---|---|
 | GET | `/health` | `{"status":"ok","database":true}`; 503 if DB health fails |
 | GET | `/version` | Code version (0.2.0) and demo flag |
-| GET | `/metrics` | Public text metrics exporter |
+| GET | `/metrics` | Text metrics exporter; requires an owner session or `Authorization: Bearer SUBGATE_METRICS_TOKEN` (YAML `http.metrics_token`) |
+| GET | `/install-agent.sh` | Agent installer served by Core itself (embedded `deploy/install-agent.sh`); no authentication |
 | GET | `/`, `/console` | Embedded console |
 | POST | `/api/v1/auth/login` | Login |
-| POST | `/api/v1/agents/enroll` | Consume one-time enrollment token |
-| POST | `/webhook/panel` | Optional signed synchronization webhook; YAML can change path |
+| POST | `/api/v1/agents/enroll` | Consume one-time enrollment token; rate limited to 10 requests per minute per IP |
 
 ## Authenticated administrative endpoints
 
@@ -32,10 +32,8 @@ Activity reads (`activity.read`) and exports (`activity.export`) record final su
 | POST | `/auth/logout` | End session |
 | GET | `/system/status` | Counts, last sync/error, database/intelligence status; `panel_version` (`expected`, `actual`, `state`: not_checked/compatible/mismatch/unavailable) |
 | GET | `/nodes`, `/users` | `q`, `offset`, `limit` (default 500, max 1000) |
-| GET | `/nodes/{id}`, `/users/{id}` | Cached object by panel UUID |
+| GET | `/nodes/{id}`, `/users/{id}` | Cached object: node by panel UUID, user by numeric panel `id` |
 | POST | `/nodes/{id}/actions/{action}` | enable, disable, restart, reset-traffic |
-| POST | `/nodes/{id}/probe` | Real TCP/TLS reachability probe; UDP is not verified by a TCP probe |
-| GET | `/health/probes` | Latest recorded probe objects |
 | POST | `/panel/sync` | Fetch and atomically publish a complete panel snapshot |
 | GET | `/live` | Independent user/node/scope rows; `user`, `node`, `scope`, `window_seconds` (default 15, range 1–60) |
 | GET | `/live/stream` | SSE full snapshots each second, same filters; not WebSocket diff |
@@ -61,33 +59,19 @@ Activity reads (`activity.read`) and exports (`activity.export`) record final su
 | GET | `/backups` | Backup file metadata |
 | POST | `/backups` | Owner creates encrypted `.sgb` snapshot |
 | GET | `/backups/{name}` | Owner downloads encrypted backup bytes |
-| GET/PUT/DELETE | `/quotas[/{id}]` | List, replace or delete; see payload below |
-| GET | `/blocks`, `/youtube` | Saved diagnostic results |
-| POST | `/nodes/{id}/block-check` | Synced inbound TCP/TLS diagnostic from Core |
-| POST | `/youtube/check` | Allowlisted YouTube HTTP diagnostic from Core |
 | POST | `/notifications/test` | Manual notifier dispatch; no sender configured may still return success |
 
-GET `/quotas` lists quota rules; PUT/DELETE require `/quotas/{id}`. Settings have GET only; no versioned hot-reload API. User revoke, host actions/bulk, logs live-tail and first-run wizard endpoints are absent.
+Settings have GET only; no versioned hot-reload API. User revoke, host actions/bulk, logs live-tail and first-run wizard endpoints are absent.
 
 ### Features delegated to middleware
 
 The injection API (`/injections`, `/injections/{id}`) and user action API (`POST /users/{id}/actions/{action}`) are no longer registered. Authenticated requests return 404. Existing injection data stays in SQLite and is ignored. Users remain readable for telemetry identity lookup; node actions remain available. Subscription routes, request-signals, tiers/policies/pins are also unregistered and return 404. No subscription upstream is configured.
 
-Original implementation, tests and documentation: [archive](../_archive/middleware-overlap-2026-10-31/README.md). See [ownership and integration](ARCHITECTURE.md#граница-с-middleware). PHP middleware has different configuration formats; this change does not migrate saved rules or deploy middleware.
+Original implementation is kept in git history (tag `pre-cleanup-2026-11-09`). See [ownership and integration](ARCHITECTURE.md#граница-с-middleware). PHP middleware has different configuration formats; this change does not migrate saved rules or deploy middleware.
 
 Live rows expose EMA3/10, recent average/peak/p95, delta bytes, 24-hour usage totals, interval/age, gap/warming/coarse fields. Top-level fields: `data`, `generated_at`, `sample_interval_ms`, `window_seconds`. The in-memory distribution uses at most 12 samples, not a guaranteed one-minute window. History `from`/`to` accept RFC3339 or Unix seconds/milliseconds; the ordered range is at most 31 days and reads at most 200000 rows. Raw speed is cleaned after 24 hours, so a 31-day request does not guarantee 31 days of data. Buckets are computed during reads, not durable rollup tiers.
 
 List responses normally use `{"data":[],"total":N,"offset":0}` for object lists or `{"data":[]}` for telemetry/audit/backup lists. Activity `from`/`to` accept RFC3339 timestamps, and filtering by `domain` is a case-insensitive destination substring over the bounded result set. Activity is not a complete browsing record: attribution requires Xray's user email and depends on logging and collection availability.
-
-## Quotas
-
-`GET /quotas`, `PUT /quotas/{id}`, and `DELETE /quotas/{id}` manage `node_id`, `scope` (`per_user` or `per_node`), `user_id` for per-user rules, positive `limit_bytes`, optional nonnegative `grace_bytes`, `period` (`day`, `week`, `month`, or `rolling`; defaults to month), optional IANA `timezone` (UTC by default), and `enabled`. Rolling means the preceding 30 days; calendar weeks begin on Monday. A PUT returns the normalized rule and server-generated `updated_at`. Rule mutations and their audit records commit atomically. Quota checks use committed telemetry in SQLite, survive Core restarts and duplicate batch replay, and fail open when usage storage cannot be read. Per-node rules include inbound fallback counters when user counters are unavailable; overlapping inbound intervals are suppressed where user observations provide a more specific measurement. Quota accounting does not alter subscriptions or cut off data-plane traffic.
-
-`POST /nodes/{id}/block-check` accepts an optional synced inbound `port` (443 by default), optional `address` matching the synchronized node IP, and `tls`/`server_name`. Unknown nodes return 404, nodes without synced endpoints return 409, and mismatched targets return 400. The check runs from Core and is audited before network activity. `GET /blocks` lists saved results.
-
-`POST /youtube/check` accepts `node_id`, optional `video_id`, and an optional endpoint restricted to HTTPS port 443 on `youtube.com`, `www.youtube.com`, `m.youtube.com`, or `youtu.be`; URL credentials and fragments are forbidden and every redirect is revalidated. Invalid endpoints return 400. Checks run from Core; `node_id` labels the result but does not move network execution to that node. `GET /youtube` lists saved results. A successful diagnostic request returns 200 with the probe result, including any network failure verdict.
-
-Compatibility tightening: block checks no longer accept arbitrary addresses or unsynced ports, and the YouTube API no longer accepts arbitrary mirror URLs. The standalone YouTube utility can still use a mirror in trusted code. Quota rules now reject unknown timezones and integer overflow. Existing authentication, error envelopes, and endpoint paths are retained.
 
 ## Xray observations and review
 
@@ -109,24 +93,14 @@ Enrollment request: `{"node_id":"UUID","token":"ONE_TIME_TOKEN"}`. A 201 respons
 
 Optional `sent_at` is the batch creation time, retained through retry and restart. It has the same 24-hour-past/five-minute-future bounds; Core preserves original sample/event timestamps and does not shift them at delivery. Missing `sent_at` remains supported. Speed/usage observations use the millisecond `(node_id,user_id,timestamp)` key: repacking identical samples with a new batch ID replaces that observation, including corrections to zero or inbound scope. Repacking activity events with a new batch ID is not an event deduplication guarantee.
 
-See [`../pkg/wire/wire.go`](../pkg/wire/wire.go) for the exact wire fields. Agent never resets Xray counters. It does not offer a remote shell or arbitrary command ingress.
+See [`../pkg/wire/wire.go`](../pkg/wire/wire.go) for the exact wire fields. Agent never resets Xray counters. Agent reports idle users every 10 seconds, re-discovers the Xray stats socket after errors and skips oversized access.log lines. It does not offer a remote shell or arbitrary command ingress.
 
 Activity queries, exports, and purge accept a synchronized panel ID, username, email, or short UUID. Core expands only aliases belonging unambiguously to one panel user; unknown Xray labels remain searchable by their original value. Stored telemetry retains the Xray label for encryption and diagnostics. Shared aliases are excluded when expanding a panel ID.
 
 Agent's encrypted pending spool defaults to `data/pending.sgb` (`-spool-file`). It retains the same batch ID across retries/restarts, limits each batch to 5000 samples/1000 events/2 MiB, and bounds pending telemetry to 16 MiB. Permanent validation 4xx responses discard the rejected batch and count lost items; 408/429/5xx and network errors retain it for retry. 401/403 stop the Agent and preserve pending telemetry. Re-enrollment changes the encryption key, so archive/remove the old spool before starting with the new token. Diagnostics report discarded or expired telemetry; logs waiting in the in-memory channel are not yet durable.
 
-## Health, transport и ключи
-Текущий health/quorum/maintenance контракт: [health](ARCHITECTURE.md#проверки-доступности).
-Sanitized inbound descriptors и verified levels (tcp/tls/ws/httpupgrade/grpc/xhttp-options/xhttp-h3-options):
-[transports](ARCHITECTURE.md#проверки-доступности). Transport acceptance не доказывает proxy-user authentication.
-
-Agent-token GET /api/v1/agents/health-targets возвращает synchronized targets (max64,16 inbounds/node).
-PUT /api/v1/agents/health-results принимает max64 результатов без повторов target, source берётся из credential.
-400 при invalid/unknown target/time/verification,401 при revoked/replaced/missing token,500 при persistence failure;
-oversize fleet health-targets503. Свежесть90s/future5s, legacy completed_at использует receive time.
-Core принимает только votes, применимые к текущему target; legacy TCP failures не дают quorum для H3-only.
-Точные optional wire fields: [wire.go](../pkg/wire/wire.go).
-Исторические health fixture failures исправлены; текущие проверки — [сохранённые результаты](DEVELOPMENT.md#последние-сохранённые-результаты).
+## Статус нод и ключи
+Состояние ноды берётся из синхронизации с панелью (isConnected/isDisabled, usersOnline), живость агента — из heartbeat. Health-проб, кворума и карантина нет. Heartbeat передаёт реальную версию сборки агента.
 
 Storage rollover: storage.encryption_key_file/SUBGATE_STORAGE_KEY_FILE и previous_encryption_key_files/
 SUBGATE_PREVIOUS_STORAGE_KEY_FILES (до8previous), restart required. Regular private32raw-byte key, no symlink/FIFO.

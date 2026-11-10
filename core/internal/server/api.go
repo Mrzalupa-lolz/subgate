@@ -26,7 +26,7 @@ func (s *Server) systemStatus(w http.ResponseWriter, r *http.Request) {
 	_ = s.db.QueryRow("SELECT COUNT(*) FROM agents WHERE token_hash IS NOT NULL AND last_heartbeat>datetime('now','-90 seconds')").Scan(&agents)
 	_ = s.db.QueryRow("SELECT COUNT(*) FROM sg_activity").Scan(&activity)
 	_ = s.db.QueryRow("SELECT COUNT(*) FROM sg_incidents WHERE status='new' AND updated_at>=?", time.Now().Add(-14*24*time.Hour).Unix()).Scan(&incidentsNew)
-	writeJSON(w, 200, map[string]any{"incidents_new": incidentsNew, "version": "0.2.0", "demo": s.config.Demo, "uptime_seconds": int(time.Since(s.started).Seconds()), "nodes": nodes, "users": users, "agents_online": agents, "activity_events": activity, "last_sync": last, "sync_error": problem, "panel_version": version, "database": s.db.Statistics(), "ipintel": s.intel.Health()})
+	writeJSON(w, 200, map[string]any{"incidents_new": incidentsNew, "version": Version, "demo": s.config.Demo, "uptime_seconds": int(time.Since(s.started).Seconds()), "nodes": nodes, "users": users, "agents_online": agents, "activity_events": activity, "last_sync": last, "sync_error": problem, "panel_version": version, "database": s.db.Statistics(), "ipintel": s.intel.Health()})
 }
 func limit(r *http.Request, def, max int) int {
 	n, e := strconv.Atoi(r.URL.Query().Get("limit"))
@@ -261,8 +261,31 @@ func (s *Server) createBackup(w http.ResponseWriter, r *http.Request) {
 		fail(w, 500, "backup write failed")
 		return
 	}
+	if err = pruneBackups(dir, backupRetention); err != nil {
+		s.logger.Warn("backup retention failed", "error", err)
+	}
 	writeJSON(w, 201, map[string]any{"name": name, "size": len(raw) + 8, "encrypted": true})
 }
+
+// backupRetention is the number of newest encrypted backups kept on disk.
+const backupRetention = 14
+
+// pruneBackups removes all but the newest keep SubGate backups in dir. Backup
+// names start with a sortable UTC timestamp.
+func pruneBackups(dir string, keep int) error {
+	matches, err := filepath.Glob(filepath.Join(dir, "subgate-*.sgb"))
+	if err != nil || len(matches) <= keep {
+		return err
+	}
+	sort.Strings(matches)
+	for _, path := range matches[:len(matches)-keep] {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *Server) downloadBackup(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 	if filepath.Base(name) != name || strings.ContainsAny(name, "\\/:") || !strings.HasSuffix(name, ".sgb") {
@@ -302,9 +325,6 @@ func (s *Server) seedDemo() error {
 		if err := s.saveObject("users", id, u); err != nil {
 			return err
 		}
-	}
-	if err := s.saveObject("tiers", "europe", map[string]any{"id": "europe", "name": "Europe", "strategy": "leastLoad", "min_healthy": 1, "node_ids": []string{"demo-node-1", "demo-node-2", "demo-node-3"}, "enabled": true}); err != nil {
-		return err
 	}
 	return s.saveObject("alerts", "demo-offline", map[string]any{"id": "demo-offline", "name": "Stockholm is offline", "severity": "warning", "node_id": "demo-node-4", "message": "Example alert. Demo data is not a measurement.", "created_at": time.Now()})
 }

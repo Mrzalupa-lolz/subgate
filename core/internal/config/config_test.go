@@ -33,57 +33,6 @@ func TestConfigurationYAMLAndEnvironment(t *testing.T) {
 	}
 }
 
-func TestMaintenanceWindowValidation(t *testing.T) {
-	now := time.Now()
-	for _, window := range []MaintenanceWindow{{NodeID: "", From: now, Until: now.Add(time.Hour)}, {NodeID: "node", Until: now}, {NodeID: "node", From: now, Until: now}, {NodeID: "node", From: now, Until: now.Add(-time.Hour)}} {
-		cfg := Defaults()
-		cfg.Demo = true
-		cfg.Health.MaintenanceWindows = []MaintenanceWindow{window}
-		if cfg.Validate() == nil {
-			t.Fatal("invalid maintenance window accepted", window)
-		}
-	}
-	cfg := Defaults()
-	cfg.Demo = true
-	cfg.Health.MaintenanceWindows = []MaintenanceWindow{{NodeID: "node", From: now, Until: now.Add(time.Hour)}}
-	if err := cfg.Validate(); err != nil {
-		t.Fatal(err)
-	}
-	path := filepath.Join(t.TempDir(), "synthetic-maintenance.yaml")
-	if err := os.WriteFile(path, []byte("demo: true\nhealth:\n  maintenance_windows:\n    - node_id: synthetic-node\n      from: 2026-10-14T08:00:00Z\n      until: 2026-10-14T09:00:00Z\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	loaded, err := Load(path)
-	if err != nil || len(loaded.Health.MaintenanceWindows) != 1 || loaded.Health.MaintenanceWindows[0].NodeID != "synthetic-node" || loaded.Health.MaintenanceWindows[0].Until.Sub(loaded.Health.MaintenanceWindows[0].From) != time.Hour {
-		t.Fatal("YAML maintenance load failed", err)
-	}
-}
-
-func TestQuarantineConfiguration(t *testing.T) {
-	for _, change := range []func(*Config){
-		func(c *Config) { c.Health.FailureThreshold = -1 },
-		func(c *Config) { c.Health.SuccessThreshold = 1001 },
-		func(c *Config) { c.Health.MinQuarantine = -time.Second },
-		func(c *Config) { c.Health.BackoffBase = time.Hour; c.Health.BackoffMax = time.Minute },
-		func(c *Config) { c.Health.BackoffMax = 25 * time.Hour },
-	} {
-		c := Defaults()
-		c.Demo = true
-		change(c)
-		if c.Validate() == nil {
-			t.Fatal("invalid quarantine config accepted")
-		}
-	}
-	path := filepath.Join(t.TempDir(), "synthetic-health.yaml")
-	if err := os.WriteFile(path, []byte("demo: true\nhealth:\n  failure_threshold: 5\n  success_threshold: 4\n  min_quarantine: 2m\n  backoff_base: 10s\n  backoff_max: 5m\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	c, err := Load(path)
-	if err != nil || c.Health.FailureThreshold != 5 || c.Health.SuccessThreshold != 4 || c.Health.MinQuarantine != 2*time.Minute || c.Health.BackoffBase != 10*time.Second || c.Health.BackoffMax != 5*time.Minute {
-		t.Fatal("quarantine config not loaded", err)
-	}
-}
-
 func TestRejectUnsafeEndpoints(t *testing.T) {
 	for _, raw := range []string{"ftp://example.com", "https://user:password@example.com", "/relative", "https://example.com/?token=secret", "https://example.com/#fragment"} {
 		t.Run(raw, func(t *testing.T) {
@@ -111,5 +60,22 @@ func TestRejectUnsafeEndpoints(t *testing.T) {
 	cfg.HTTP.TLS.Enabled = true
 	if cfg.Validate() == nil {
 		t.Fatal("TLS without key accepted")
+	}
+}
+
+func TestTelegramFromEnvironment(t *testing.T) {
+	t.Setenv("SUBGATE_DEMO", "true")
+	t.Setenv("SUBGATE_TELEGRAM_TOKEN", "123:synthetic")
+	t.Setenv("SUBGATE_TELEGRAM_CHAT_IDS", "42, -100123")
+	cfg, err := LoadFromEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Telegram.Enabled || cfg.Telegram.Token != "123:synthetic" || len(cfg.Telegram.AllowedUserIDs) != 2 || cfg.Telegram.AllowedUserIDs[1] != -100123 {
+		t.Fatalf("telegram env config: %+v", cfg.Telegram)
+	}
+	t.Setenv("SUBGATE_TELEGRAM_CHAT_IDS", "not-a-number")
+	if _, err := LoadFromEnv(); err == nil {
+		t.Fatal("invalid chat id accepted")
 	}
 }

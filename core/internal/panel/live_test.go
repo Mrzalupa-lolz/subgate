@@ -28,7 +28,7 @@ func TestLivePanelReadContract(t *testing.T) {
 	defer c.Close()
 	c.httpClient.Transport = syntheticPanelTransport{http.DefaultTransport}
 	version, err := c.Version(context.Background())
-	if err != nil || version != "3.4.5" {
+	if err != nil || !VersionCompatible(version) {
 		t.Fatal("synthetic panel version contract failed")
 	}
 	users, total, err := c.ListUsers(0, 10)

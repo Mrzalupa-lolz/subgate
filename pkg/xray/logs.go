@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -20,6 +19,9 @@ import (
 
 var accessPattern = regexp.MustCompile(`(?:from\s+)?((?:tcp:|udp:)?\S+)\s+(accepted|rejected)\s+(tcp|udp):(\S+)(?:\s+\[([^\]]+)\])?`)
 var userPattern = regexp.MustCompile(`\bemail:\s*(\S+)`)
+
+// maxLogLine bounds one access.log line; longer lines are skipped, not fatal.
+const maxLogLine = 1 << 20
 
 func ParseLine(line string) *wire.Activity {
 	if len(line) > 1<<20 || line == "" {
@@ -98,6 +100,7 @@ func Tail(ctx context.Context, path string, events chan<- wire.Activity, logger 
 	}
 	reader := bufio.NewReaderSize(f, 64<<10)
 	partial := ""
+	skipping := false
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 	for {
@@ -106,11 +109,21 @@ func Tail(ctx context.Context, path string, events chan<- wire.Activity, logger 
 			return nil
 		case <-ticker.C:
 			for {
-				part, e := reader.ReadString('\n')
-				offset += int64(len(part))
-				partial += part
-				if len(partial) > 1<<20 {
-					return fmt.Errorf("Xray log line exceeds 1 MiB")
+				chunk, e := reader.ReadSlice('\n')
+				offset += int64(len(chunk))
+				if skipping {
+					// Discard the rest of an oversized line without buffering it.
+					if e == nil {
+						skipping = false
+					}
+				} else if len(partial)+len(chunk) > maxLogLine {
+					partial = ""
+					skipping = e != nil
+				} else {
+					partial += string(chunk)
+				}
+				if errors.Is(e, bufio.ErrBufferFull) {
+					continue
 				}
 				if strings.HasSuffix(partial, "\n") {
 					if event := ParseLine(strings.TrimSpace(partial)); event != nil {
@@ -150,6 +163,7 @@ func Tail(ctx context.Context, path string, events chan<- wire.Activity, logger 
 				reader = bufio.NewReaderSize(f, 64<<10)
 				offset = 0
 				partial = ""
+				skipping = false
 				logger.Info("Xray access log reopened after rotation")
 			}
 		}

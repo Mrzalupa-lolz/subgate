@@ -31,7 +31,6 @@ vet:
 lint:
 	@test -z "$$(gofmt -l core agent pkg web)"
 	node --check web/app.js
-	bash -n deploy/install.sh
 	bash -n deploy/install-agent.sh
 	bash -n deploy/install-core.sh
 	bash scripts/test-core-installer.sh

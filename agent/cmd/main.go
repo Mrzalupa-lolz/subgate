@@ -17,6 +17,7 @@ import (
 var version = "0.2.0"
 
 func main() {
+	agent.Version = version
 	enroll := len(os.Args) > 1 && os.Args[1] == "enroll"
 	check := len(os.Args) > 1 && os.Args[1] == "check"
 	health := len(os.Args) > 1 && os.Args[1] == "health"

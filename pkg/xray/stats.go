@@ -37,6 +37,7 @@ type previous struct {
 }
 type StatsClient struct {
 	address     string
+	discovered  bool // address came from auto-discovery and may move
 	conn        *grpc.ClientConn
 	logger      *slog.Logger
 	mu          sync.Mutex
@@ -74,15 +75,17 @@ func descriptors() protoreflect.FileDescriptor {
 	return statsDescriptor
 }
 func NewStatsClient(address string, logger *slog.Logger) (*StatsClient, error) {
+	discovered := false
 	if address == "" || address == "auto" {
 		address = discoverAddress()
+		discovered = true
 	}
 	if strings.HasPrefix(address, "unix:") {
 		path := strings.TrimPrefix(address, "unix:")
 		if path == "" || (!strings.HasPrefix(path, "/") && !strings.HasPrefix(path, "@")) {
 			return nil, fmt.Errorf("Unix stats address must be unix:/absolute/path or unix:@abstract-name")
 		}
-		return &StatsClient{address: address, logger: logger, last: map[string]previous{}, lastInbound: map[string]previous{}}, nil
+		return &StatsClient{address: address, discovered: discovered, logger: logger, last: map[string]previous{}, lastInbound: map[string]previous{}}, nil
 	}
 	host, _, err := net.SplitHostPort(address)
 	if err != nil {
@@ -92,7 +95,7 @@ func NewStatsClient(address string, logger *slog.Logger) (*StatsClient, error) {
 	if host != "localhost" && (ip == nil || !ip.IsLoopback()) {
 		return nil, fmt.Errorf("insecure Xray StatsService must use a loopback address")
 	}
-	return &StatsClient{address: address, logger: logger, last: map[string]previous{}, lastInbound: map[string]previous{}}, nil
+	return &StatsClient{address: address, discovered: discovered, logger: logger, last: map[string]previous{}, lastInbound: map[string]previous{}}, nil
 }
 
 // Remnanode uses an abstract Unix socket in current Xray releases. The socket
@@ -143,6 +146,24 @@ func (s *StatsClient) connectLocked() error {
 	s.conn = conn
 	return nil
 }
+
+// rediscoverLocked follows Remnanode when a restarted Xray exposes its API on a
+// new abstract socket name. Explicitly configured addresses never change.
+func (s *StatsClient) rediscoverLocked() {
+	if !s.discovered {
+		return
+	}
+	if next := discoverAddress(); next != s.address {
+		if s.logger != nil {
+			s.logger.Info("Xray stats socket moved", "address", next)
+		}
+		s.address = next
+		if s.conn != nil {
+			_ = s.conn.Close()
+			s.conn = nil
+		}
+	}
+}
 func (s *StatsClient) queryLocked(ctx context.Context, pattern string) (map[string]int64, error) {
 	if err := s.connectLocked(); err != nil {
 		return nil, err
@@ -155,6 +176,7 @@ func (s *StatsClient) queryLocked(ctx context.Context, pattern string) (map[stri
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	if err := s.conn.Invoke(ctx, "/xray.app.stats.command.StatsService/QueryStats", req, resp); err != nil {
+		s.rediscoverLocked()
 		return nil, fmt.Errorf("Xray stats query failed: %w", err)
 	}
 	list := resp.Get(resp.Descriptor().Fields().ByName("stat")).List()
@@ -272,33 +294,6 @@ func (s *StatsClient) QueryInboundSpeeds(ctx context.Context) ([]PerUserStats, e
 	sort.Slice(result, func(i, j int) bool { return result[i].Email < result[j].Email })
 	return result, nil
 }
-func (s *StatsClient) GetUserSpeed(ctx context.Context, email string) (int64, int64, error) {
-	stats, err := s.QueryStats(ctx)
-	if err != nil {
-		return 0, 0, err
-	}
-	for _, v := range stats {
-		if v.Email == email {
-			return v.UplinkBps, v.DownlinkBps, nil
-		}
-	}
-	return 0, 0, fmt.Errorf("user counters not found")
-}
-func (s *StatsClient) GetInboundStats(ctx context.Context, tag string) (int64, int64, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	values, err := s.queryLocked(ctx, "inbound>>>"+tag+">>>traffic>>>")
-	if err != nil {
-		return 0, 0, err
-	}
-	return values["inbound>>>"+tag+">>>traffic>>>uplink"], values["inbound>>>"+tag+">>>traffic>>>downlink"], nil
-}
-func (s *StatsClient) Health(ctx context.Context) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	_, err := s.queryLocked(ctx, "user>>>")
-	return err
-}
 func (s *StatsClient) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -308,20 +303,6 @@ func (s *StatsClient) Close() error {
 		return err
 	}
 	return nil
-}
-func ExtractUserEmail(name string) string {
-	p := strings.Split(name, ">>>")
-	if len(p) == 4 && p[0] == "user" && p[2] == "traffic" {
-		return p[1]
-	}
-	return ""
-}
-func ExtractInboundTag(name string) string {
-	p := strings.Split(name, ">>>")
-	if len(p) == 4 && p[0] == "inbound" && p[2] == "traffic" {
-		return p[1]
-	}
-	return ""
 }
 func ComputeSpeed(delta int64, seconds float64) int64 {
 	if delta <= 0 || seconds <= 0 || math.IsNaN(seconds) || math.IsInf(seconds, 0) {

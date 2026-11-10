@@ -2,17 +2,10 @@ package server
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"net/http"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/subgate/subgate/core/internal/panel"
@@ -63,7 +56,6 @@ func (s *Server) syncPanelWithAudit(ctx context.Context, audit func(*sql.Tx) err
 	}
 	s.syncMu.Lock()
 	revision := s.syncRevision
-	fetchStarted := time.Now()
 	s.syncMu.Unlock()
 	nodes, err := s.panel.ListNodesContext(ctx)
 	users := []panel.User{}
@@ -93,7 +85,7 @@ func (s *Server) syncPanelWithAudit(ctx context.Context, audit func(*sql.Tx) err
 		s.syncMu.Lock()
 		defer s.syncMu.Unlock()
 		if revision != s.syncRevision {
-			return fmt.Errorf("panel snapshot superseded by a webhook or another sync")
+			return fmt.Errorf("panel snapshot superseded by another sync")
 		}
 		tx, e := s.db.BeginTx()
 		if e != nil {
@@ -121,9 +113,8 @@ func (s *Server) syncPanelWithAudit(ctx context.Context, audit func(*sql.Tx) err
 				_, err = tx.Exec("INSERT INTO sg_objects(kind,id,data,updated_at) VALUES('users',?,?,?)", u.ID, string(raw), time.Now().Unix())
 			}
 			if err == nil {
-				// Global watermark also covers users removed or absent in the full
-				// snapshot, preventing delayed events from resurrecting them.
-				_, err = tx.Exec("INSERT INTO sg_objects(kind,id,data,updated_at) VALUES('webhook-sync-clock','users',?,?) ON CONFLICT(kind,id) DO UPDATE SET data=excluded.data,updated_at=excluded.updated_at", strconv.FormatInt(fetchStarted.UnixNano(), 10), time.Now().Unix())
+				// Drop the watermark left by the removed panel webhook receiver.
+				_, err = tx.Exec("DELETE FROM sg_objects WHERE kind='webhook-sync-clock'")
 			}
 			if err == nil && audit != nil {
 				err = audit(tx)
@@ -146,6 +137,11 @@ func (s *Server) syncPanelWithAudit(ctx context.Context, audit func(*sql.Tx) err
 	s.stateMu.Unlock()
 	return err
 }
+func (s *Server) startBackground() {
+	s.wg.Add(1)
+	go s.background()
+}
+
 func (s *Server) background() {
 	defer s.wg.Done()
 	if !s.config.Demo {
@@ -172,18 +168,7 @@ func (s *Server) background() {
 				}
 				cancel()
 			}
-			_, _ = s.db.Exec("DELETE FROM sg_sessions WHERE expires_at<?", time.Now().Unix())
-			_, _ = s.db.Exec("DELETE FROM sg_enrollment WHERE expires_at<?", time.Now().Unix())
-			_, _ = s.db.Exec("DELETE FROM sg_webhooks WHERE timestamp<?", time.Now().Add(-24*time.Hour).Unix())
-			_, _ = s.db.Exec("DELETE FROM sg_speed WHERE timestamp<?", time.Now().Add(-24*time.Hour).UnixMilli())
-			_, _ = s.db.Exec("DELETE FROM sg_analysis_windows WHERE minute<?", time.Now().Add(-3*time.Minute).Unix()/60)
-			_, _ = s.db.Exec("DELETE FROM sg_analysis_seen WHERE minute<?", time.Now().Add(-3*time.Minute).Unix()/60)
-			_, _ = s.db.Exec("DELETE FROM sg_incidents WHERE updated_at<?", time.Now().Add(-14*24*time.Hour).Unix())
-			ttl := s.config.Storage.ActivityJournal.HotTTL
-			if ttl <= 0 {
-				ttl = 14 * 24 * time.Hour
-			}
-			_, _ = s.db.Exec("DELETE FROM sg_activity WHERE timestamp<?", time.Now().Add(-ttl).UnixMilli())
+			s.pruneStorage(time.Now())
 		}
 	}
 }
@@ -199,180 +184,39 @@ func (s *Server) syncHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, 200, map[string]bool{"ok": true})
 }
-func (s *Server) webhook(w http.ResponseWriter, r *http.Request) {
-	if s.config.Panel.WebhookKey == "" {
-		fail(w, 503, "webhook secret is not configured")
-		return
-	}
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
-	if err != nil {
-		fail(w, 413, "webhook exceeds limit")
-		return
-	}
-	signature := strings.TrimPrefix(r.Header.Get("X-Remnawave-Signature"), "sha256=")
-	if signature == "" {
-		signature = strings.TrimPrefix(r.Header.Get("X-Webhook-Signature"), "sha256=")
-	}
-	provided, e := hex.DecodeString(signature)
-	mac := hmac.New(sha256.New, []byte(s.config.Panel.WebhookKey))
-	mac.Write(body)
-	if e != nil || !hmac.Equal(provided, mac.Sum(nil)) {
-		fail(w, 401, "invalid signature")
-		return
-	}
-	var event struct {
-		Event     string          `json:"event"`
-		Type      string          `json:"type"`
-		Timestamp json.RawMessage `json:"timestamp"`
-		Data      json.RawMessage `json:"data"`
-	}
-	if err = json.Unmarshal(body, &event); err != nil || len(event.Data) == 0 || (event.Event == "" && event.Type == "") {
-		fail(w, 400, "invalid webhook event")
-		return
-	}
-	var timestamp time.Time
-	var value string
-	if json.Unmarshal(event.Timestamp, &value) == nil {
-		timestamp, _ = time.Parse(time.RFC3339, value)
-	} else {
-		var n int64
-		if json.Unmarshal(event.Timestamp, &n) == nil {
-			if n > 1e12 {
-				timestamp = time.UnixMilli(n)
-			} else {
-				timestamp = time.Unix(n, 0)
-			}
-		}
-	}
-	if timestamp.IsZero() || time.Since(timestamp) > 24*time.Hour || time.Until(timestamp) > 5*time.Minute {
-		fail(w, 400, "webhook timestamp outside replay window")
-		return
-	}
-	eventType := event.Event
-	if eventType == "" {
-		eventType = event.Type
-	}
-	var user *panel.User
-	if eventType == "user.updated" {
-		user, err = panel.DecodeWebhookUser(event.Data)
-		if err != nil {
-			fail(w, 400, "invalid webhook user")
-			return
-		}
-	}
-	// A full sync must not overwrite a webhook with an older snapshot fetched
-	// before delivery. Serialize both paths through syncMu.
-	s.syncMu.Lock()
-	defer s.syncMu.Unlock()
-	key := hash(string(body))
-	var identity struct {
-		ID json.Number `json:"id"`
-	}
-	if user != nil {
-		_ = json.Unmarshal(event.Data, &identity)
-	}
-	duplicate, err := s.persistWebhook(key, user, string(identity.ID), timestamp)
-	if err != nil {
-		fail(w, 500, "webhook persistence failed")
-		return
-	}
-	if duplicate {
-		writeJSON(w, 200, map[string]bool{"duplicate": true})
-		return
-	}
-	s.syncRevision++
-	writeJSON(w, 202, map[string]bool{"accepted": true})
-}
 
-func (s *Server) persistWebhook(key string, user *panel.User, numericID string, timestamp time.Time) (bool, error) {
-	tx, err := s.db.BeginTx()
-	if err != nil {
-		return false, err
+// auditRetention keeps owner actions and journal reads for half a year.
+const auditRetention = 180 * 24 * time.Hour
+
+// pruneStorage applies retention to every table that grows with traffic or
+// time. Raw per-second speed rows (sg_speed, sg_speed_meta, sg_usage) back the
+// 24-hour live and traffic views only.
+func (s *Server) pruneStorage(now time.Time) {
+	ttl := s.config.Storage.ActivityJournal.HotTTL
+	if ttl <= 0 {
+		ttl = 14 * 24 * time.Hour
 	}
-	defer s.db.TxUnlock()
-	defer tx.Rollback()
-	result, err := tx.Exec("INSERT OR IGNORE INTO sg_webhooks(key,timestamp) VALUES(?,?)", key, time.Now().Unix())
-	if err != nil {
-		return false, err
+	speedCutoff := now.Add(-24 * time.Hour).UnixMilli()
+	statements := []struct {
+		query string
+		arg   any
+	}{
+		{"DELETE FROM sg_sessions WHERE expires_at<?", now.Unix()},
+		{"DELETE FROM sg_enrollment WHERE expires_at<?", now.Unix()},
+		{"DELETE FROM sg_webhooks WHERE timestamp<?", now.Add(-24 * time.Hour).Unix()},
+		{"DELETE FROM sg_speed WHERE timestamp<?", speedCutoff},
+		{"DELETE FROM sg_speed_meta WHERE timestamp<?", speedCutoff},
+		{"DELETE FROM sg_usage WHERE timestamp<?", speedCutoff},
+		{"DELETE FROM sg_analysis_windows WHERE minute<?", now.Add(-3*time.Minute).Unix() / 60},
+		{"DELETE FROM sg_analysis_seen WHERE minute<?", now.Add(-3*time.Minute).Unix() / 60},
+		{"DELETE FROM sg_incidents WHERE updated_at<?", now.Add(-14 * 24 * time.Hour).Unix()},
+		{"DELETE FROM sg_shaper_actions WHERE expires_at<?", now.Add(-30 * 24 * time.Hour).Unix()},
+		{"DELETE FROM sg_activity WHERE timestamp<?", now.Add(-ttl).UnixMilli()},
+		{"DELETE FROM audit_log WHERE timestamp<?", now.Add(-auditRetention).UTC().Format("2006-01-02 15:04:05")},
 	}
-	n, err := result.RowsAffected()
-	if err != nil {
-		return false, err
-	}
-	if n == 0 {
-		return true, nil
-	}
-	if user != nil {
-		var watermark string
-		err = tx.QueryRow("SELECT data FROM sg_objects WHERE kind='webhook-sync-clock' AND id='users'").Scan(&watermark)
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return false, err
-		}
-		if err == nil {
-			previous, parseErr := strconv.ParseInt(watermark, 10, 64)
-			if parseErr != nil {
-				return false, parseErr
-			}
-			if timestamp.UnixNano() <= previous {
-				return false, tx.Commit()
-			}
-		}
-		// Preserve the canonical numeric identity when the REST schema omitted
-		// uuid, but only if both native numeric id and shortUuid agree. Ambiguous
-		// or conflicting identities are rejected instead of creating aliases.
-		rows, queryErr := tx.Query("SELECT id FROM sg_objects WHERE kind='users' AND json_extract(data,'$.short_uuid')=?", user.ShortUUID)
-		if queryErr != nil {
-			return false, queryErr
-		}
-		var canonical string
-		count := 0
-		for rows.Next() {
-			if err := rows.Scan(&canonical); err != nil {
-				rows.Close()
-				return false, err
-			}
-			count++
-		}
-		queryErr = rows.Err()
-		rows.Close()
-		if queryErr != nil {
-			return false, queryErr
-		}
-		if count > 1 {
-			return false, errors.New("ambiguous webhook user identity")
-		}
-		if count == 1 && canonical != user.ID {
-			if canonical != numericID {
-				return false, errors.New("conflicting webhook user identity")
-			}
-			user.ID = canonical
-		}
-		var last string
-		err = tx.QueryRow("SELECT data FROM sg_objects WHERE kind='webhook-user-clocks' AND id=?", user.ID).Scan(&last)
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return false, err
-		}
-		if err == nil {
-			previous, parseErr := strconv.ParseInt(last, 10, 64)
-			if parseErr != nil {
-				return false, parseErr
-			}
-			if timestamp.UnixNano() <= previous {
-				return false, tx.Commit()
-			}
-		}
-		_, err = tx.Exec("INSERT INTO sg_objects(kind,id,data,updated_at) VALUES('webhook-user-clocks',?,?,?) ON CONFLICT(kind,id) DO UPDATE SET data=excluded.data,updated_at=excluded.updated_at", user.ID, strconv.FormatInt(timestamp.UnixNano(), 10), time.Now().Unix())
-		if err != nil {
-			return false, err
-		}
-		raw, marshalErr := json.Marshal(user)
-		if marshalErr != nil {
-			return false, marshalErr
-		}
-		_, err = tx.Exec("INSERT INTO sg_objects(kind,id,data,updated_at) VALUES('users',?,?,?) ON CONFLICT(kind,id) DO UPDATE SET data=excluded.data,updated_at=excluded.updated_at", user.ID, string(raw), time.Now().Unix())
-		if err != nil {
-			return false, err
+	for _, statement := range statements {
+		if _, err := s.db.Exec(statement.query, statement.arg); err != nil {
+			s.logger.Warn("storage retention failed", "query", statement.query, "error", err)
 		}
 	}
-	return false, tx.Commit()
 }

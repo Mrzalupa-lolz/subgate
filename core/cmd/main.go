@@ -22,6 +22,7 @@ import (
 var version = "0.2.0"
 
 func main() {
+	server.Version = version
 	path := flag.String("config", "", "Configuration YAML file; defaults to environment")
 	level := flag.String("log-level", "info", "Log level: debug, info, warn, error")
 	demo := flag.Bool("demo", false, "Run a local demo with explicitly synthetic data")

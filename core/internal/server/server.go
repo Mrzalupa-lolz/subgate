@@ -21,17 +21,14 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/subgate/subgate/core/internal/activity"
-	"github.com/subgate/subgate/core/internal/blocks"
 	"github.com/subgate/subgate/core/internal/config"
 	"github.com/subgate/subgate/core/internal/db"
-	"github.com/subgate/subgate/core/internal/health"
 	"github.com/subgate/subgate/core/internal/ipintel"
 	"github.com/subgate/subgate/core/internal/metrics"
 	"github.com/subgate/subgate/core/internal/notify"
 	"github.com/subgate/subgate/core/internal/panel"
-	"github.com/subgate/subgate/core/internal/quota"
 	"github.com/subgate/subgate/core/internal/tsdb"
+	"github.com/subgate/subgate/deploy"
 	"github.com/subgate/subgate/web"
 )
 
@@ -45,8 +42,6 @@ type Server struct {
 	intel              *ipintel.Engine
 	aead               cipher.AEAD
 	previousAEADs      []cipher.AEAD
-	health             *health.Engine
-	healthMu           sync.Mutex
 	ctx                context.Context
 	cancel             context.CancelFunc
 	wg                 sync.WaitGroup
@@ -63,15 +58,15 @@ type Server struct {
 	attempts           map[string]attempt
 	liveStore          *tsdb.LiveStore
 	metrics            *metrics.Registry
-	quota              *quota.Manager
-	quotaMu            sync.Mutex // Keep committed rule mutations and manager updates in order.
 	notify             *notify.Dispatcher
-	blocks             *blocks.Detector
-	journal            *activity.Journal
 	metricRequests     *metrics.Counter
 	metricErrors       *metrics.Counter
 	metricLatency      *metrics.Histogram
 }
+
+// Version is the Core build version, set by core/cmd from -ldflags.
+var Version = "dev"
+
 type attempt struct {
 	count int
 	start time.Time
@@ -94,15 +89,11 @@ func New(cfg *config.Config, database *db.DB, logger *slog.Logger) (*Server, err
 		senders = append(senders, &notify.Telegram{Token: cfg.Telegram.Token, ChatIDs: cfg.Telegram.AllowedUserIDs, Logger: logger})
 	}
 	notifyQuiet := notify.QuietHours{Enabled: cfg.Telegram.QuietHours.Enabled, StartHour: cfg.Telegram.QuietHours.StartHour, EndHour: cfg.Telegram.QuietHours.EndHour, Location: quietLocation}
-	s := &Server{config: cfg, db: database, logger: logger, router: chi.NewRouter(), ctx: ctx, cancel: cancel, started: time.Now(), attempts: map[string]attempt{}, liveStore: tsdb.NewLiveStore(100000), metrics: registry, quota: quota.New(), blocks: blocks.New(blocks.Config{}), journal: activity.NewJournal(logger), notify: notify.NewDispatcher(logger, cfg.Telegram.AlertCooldown, notifyQuiet, senders...)}
+	s := &Server{config: cfg, db: database, logger: logger, router: chi.NewRouter(), ctx: ctx, cancel: cancel, started: time.Now(), attempts: map[string]attempt{}, liveStore: tsdb.NewLiveStore(100000), metrics: registry, notify: notify.NewDispatcher(logger, cfg.Telegram.AlertCooldown, notifyQuiet, senders...)}
 	s.metricRequests = registry.MustCounter("subgate_http_requests_total", "HTTP requests handled by SubGate")
 	s.metricErrors = registry.MustCounter("subgate_http_errors_total", "HTTP requests that returned an error")
 	s.metricLatency = registry.MustHistogram("subgate_http_request_duration_seconds", "HTTP request duration", []float64{0.005, 0.01, 0.025, 0.1, 0.5, 1, 5})
 	if err := s.initialize(); err != nil {
-		cancel()
-		return nil, err
-	}
-	if err := s.initializeHealth(); err != nil {
 		cancel()
 		return nil, err
 	}
@@ -119,10 +110,6 @@ func New(cfg *config.Config, database *db.DB, logger *slog.Logger) (*Server, err
 			logger.Warn("IP dataset unavailable", "error", err)
 		}
 	}
-	if err := s.loadPersistedQuotas(); err != nil {
-		logger.Warn("quota state unavailable", "error", err)
-	}
-	s.quota.SetUsageReader(s.quotaUsage)
 	s.routes()
 	return s, nil
 }
@@ -139,7 +126,6 @@ func (s *Server) initialize() error {
  CREATE INDEX IF NOT EXISTS sg_analysis_seen_time ON sg_analysis_seen(minute);
  CREATE TABLE IF NOT EXISTS sg_incidents(id TEXT PRIMARY KEY,updated_at INTEGER NOT NULL,status TEXT NOT NULL,payload BLOB NOT NULL,review BLOB);
  CREATE INDEX IF NOT EXISTS sg_incidents_time ON sg_incidents(updated_at DESC);
- CREATE TABLE IF NOT EXISTS sg_snapshots(key TEXT PRIMARY KEY,payload BLOB NOT NULL,stored_at INTEGER NOT NULL);
  CREATE TABLE IF NOT EXISTS sg_activity(id INTEGER PRIMARY KEY AUTOINCREMENT,node_id TEXT NOT NULL,user_id TEXT NOT NULL,timestamp INTEGER NOT NULL,payload BLOB NOT NULL);
  CREATE INDEX IF NOT EXISTS sg_activity_user ON sg_activity(user_id,timestamp DESC);
  CREATE INDEX IF NOT EXISTS sg_activity_time ON sg_activity(timestamp DESC);
@@ -244,9 +230,14 @@ func (s *Server) routes() {
 		writeJSON(w, code, map[string]any{"status": map[bool]string{true: "ok", false: "error"}[ok], "database": ok})
 	})
 	r.Get("/version", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"version": "0.2.0", "demo": s.config.Demo})
+		writeJSON(w, 200, map[string]any{"version": Version, "demo": s.config.Demo})
 	})
-	r.Get("/metrics", s.metrics.Handler().ServeHTTP)
+	r.Get("/metrics", s.metricsEndpoint)
+	r.Get("/install-agent.sh", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/x-shellscript; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
+		_, _ = w.Write(deploy.AgentInstaller)
+	})
 	r.Post("/api/v1/auth/login", s.login)
 	r.Post("/api/v1/agents/enroll", s.enroll)
 	r.Group(func(r chi.Router) {
@@ -256,8 +247,6 @@ func (s *Server) routes() {
 		r.Get("/api/v1/agents/shaper", s.shaperCommands)
 		r.Put("/api/v1/agents/shaper-results", s.shaperResults)
 		r.Post("/api/v1/agents/telemetry", s.telemetry)
-		r.Get("/api/v1/agents/health-targets", s.agentHealthTargets)
-		r.Put("/api/v1/agents/health-results", s.agentHealthResults)
 	})
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(s.authenticate)
@@ -267,8 +256,6 @@ func (s *Server) routes() {
 		r.Get("/nodes", s.listNodes)
 		r.Get("/nodes/{id}", s.getNode)
 		r.Post("/nodes/{id}/actions/{action}", s.nodeAction)
-		r.Post("/nodes/{id}/probe", s.probeNode)
-		r.Get("/health/probes", func(w http.ResponseWriter, r *http.Request) { s.listObjects(w, r, "health") })
 		r.Get("/users", s.listUsers)
 		r.Get("/users/{id}", s.getUser)
 		r.Post("/panel/sync", s.syncHandler)
@@ -297,13 +284,6 @@ func (s *Server) routes() {
 		r.Get("/backups", s.backups)
 		r.Post("/backups", s.createBackup)
 		r.Get("/backups/{name}", s.downloadBackup)
-		r.Get("/quotas", s.listQuotas)
-		r.Put("/quotas/{id}", s.putQuota)
-		r.Delete("/quotas/{id}", s.deleteQuota)
-		r.Get("/blocks", s.listBlocks)
-		r.Post("/nodes/{id}/block-check", s.blockCheck)
-		r.Get("/youtube", s.youtubeStatus)
-		r.Post("/youtube/check", s.youtubeCheck)
 		r.Post("/notifications/test", s.notificationTest)
 		for _, kind := range []string{"alerts"} {
 			kind := kind
@@ -312,7 +292,6 @@ func (s *Server) routes() {
 			r.Delete("/"+kind+"/{id}", func(w http.ResponseWriter, r *http.Request) { s.deleteObject(w, r, kind) })
 		}
 	})
-	r.Post(s.config.Panel.WebhookPath, s.webhook)
 	assets, _ := fs.Sub(web.Assets, ".")
 	files := http.FileServer(http.FS(assets))
 	r.Get("/", files.ServeHTTP)

@@ -52,8 +52,26 @@ type Agent struct {
 	statsQueryMS              int64
 	statsUsers                int
 	statsScope                string
-	healthCursor              int
+	series                    map[string]*seriesState
 }
+
+// Version is the agent build version reported in heartbeats, set by
+// agent/cmd from -ldflags.
+var Version = "dev"
+
+// seriesState tracks what was last reported for one (scope, user) series.
+type seriesState struct {
+	last  time.Time
+	zeros int
+}
+
+const (
+	// idleGrace zero samples are always sent after activity so Core EMAs settle.
+	idleGrace = 5
+	// idleKeepalive bounds how long an idle series stays silent. It is below
+	// the Core live horizon (15 s) and the analysis interval ceiling (15 s).
+	idleKeepalive = 10 * time.Second
+)
 
 const (
 	maxBatchSamples       = 5000
@@ -62,6 +80,7 @@ const (
 	maxSpoolBytes         = 16 << 20
 	spoolMagic            = "SUBGATE-SPOOL-1\x00"
 	deliveryQueueCapacity = 8
+	maxBatchesPerTick     = 16
 )
 
 type queuedTelemetry struct {
@@ -286,6 +305,18 @@ func syncSpoolDirectory(dir string) error {
 	defer f.Close()
 	return f.Sync()
 }
+
+// resetPendingCreated keeps pendingCreated equal to the creation time of the
+// oldest retained batch, or zero for an empty queue.
+func (a *Agent) resetPendingCreated() {
+	if len(a.pending) == 0 {
+		a.pendingCreated = time.Time{}
+		return
+	}
+	if oldest := a.pending[0].SentAt; !oldest.IsZero() {
+		a.pendingCreated = oldest
+	}
+}
 func telemetryCount(batches []wire.Telemetry) uint64 {
 	var count uint64
 	for _, batch := range batches {
@@ -444,7 +475,9 @@ func (a *Agent) appendPending(batch wire.Telemetry, created time.Time) {
 		a.recordDropped(uint64(len(batch.Samples) + len(batch.Events)))
 		return
 	}
-	if a.pendingCreated.IsZero() {
+	if len(a.pending) == 0 {
+		// A new queue starts its own retention clock. Reusing the clock of an
+		// already delivered queue expired all telemetry 24h after start.
 		a.pendingCreated = created
 	}
 	a.pending = append(a.pending, batch)
@@ -459,6 +492,7 @@ func (a *Agent) appendPending(batch wire.Telemetry, created time.Time) {
 		removed := a.pending[0]
 		a.pending = a.pending[1:]
 		a.recordDropped(uint64(len(removed.Samples) + len(removed.Events)))
+		a.resetPendingCreated()
 	}
 	a.mu.Lock()
 	a.pendingBatches = len(a.pending)
@@ -498,6 +532,7 @@ func (a *Agent) deliverPending() error {
 		}
 		count := telemetryCount(a.pending)
 		a.pending = nil
+		a.resetPendingCreated()
 		a.mu.Lock()
 		a.expired += count
 		a.pendingBatches = 0
@@ -536,6 +571,7 @@ func (a *Agent) deliverPending() error {
 			}
 			count := uint64(len(a.pending[0].Samples) + len(a.pending[0].Events))
 			a.pending = remaining
+			a.resetPendingCreated()
 			a.mu.Lock()
 			a.dropped += count
 			a.pendingBatches = len(remaining)
@@ -559,6 +595,7 @@ func (a *Agent) deliverPending() error {
 		return err
 	}
 	a.pending = remaining
+	a.resetPendingCreated()
 	a.mu.Lock()
 	a.pendingBatches = len(a.pending)
 	a.deliveryError = ""
@@ -647,6 +684,55 @@ func (a *Agent) collectSamples() ([]wire.Sample, error) {
 	return samples, err
 }
 
+// thinIdle drops repeated zero samples of idle series. Xray keeps counters for
+// every user that connected since it started, so most per-second samples are
+// zeros. Reported intervals stay contiguous: a keepalive covers the skipped
+// seconds and resumed activity is preceded by one zero sample for the gap.
+func (a *Agent) thinIdle(samples []wire.Sample) []wire.Sample {
+	if a.series == nil {
+		a.series = map[string]*seriesState{}
+	}
+	out := make([]wire.Sample, 0, len(samples))
+	seen := make(map[string]bool, len(samples))
+	for _, sample := range samples {
+		key := sample.Scope + "|" + sample.UserID
+		seen[key] = true
+		state := a.series[key]
+		if state == nil {
+			state = &seriesState{}
+			a.series[key] = state
+		}
+		idle := sample.UplinkDelta == 0 && sample.DownlinkDelta == 0 && sample.UplinkBps == 0 && sample.DownlinkBps == 0 && !sample.Gap && !sample.Warming
+		skipping := state.zeros >= idleGrace && !state.last.IsZero()
+		if idle {
+			state.zeros++
+			if skipping {
+				elapsed := sample.Timestamp.Sub(state.last)
+				if elapsed < idleKeepalive {
+					continue
+				}
+				sample.IntervalMS = elapsed.Milliseconds()
+			}
+		} else {
+			if skipping {
+				start := sample.Timestamp.Add(-time.Duration(sample.IntervalMS) * time.Millisecond)
+				if gap := start.Sub(state.last); gap >= time.Second {
+					out = append(out, wire.Sample{UserID: sample.UserID, Scope: sample.Scope, Timestamp: start, IntervalMS: gap.Milliseconds()})
+				}
+			}
+			state.zeros = 0
+		}
+		state.last = sample.Timestamp
+		out = append(out, sample)
+	}
+	for key := range a.series {
+		if !seen[key] {
+			delete(a.series, key)
+		}
+	}
+	return out
+}
+
 func (a *Agent) drainEvents() []wire.Activity {
 	events := make([]wire.Activity, 0, 1000)
 	for len(events) < 1000 {
@@ -669,16 +755,25 @@ func (a *Agent) deliveryLoop(queue <-chan queuedTelemetry, result chan<- error) 
 		case item := <-queue:
 			a.appendPending(item.batch, item.created)
 		case <-ticker.C:
-			if err := a.deliverPending(); err != nil {
-				var httpErr *coreHTTPError
-				if errors.As(err, &httpErr) && (httpErr.status == 401 || httpErr.status == 403) {
-					select {
-					case result <- fmt.Errorf("agent credential rejected; re-enroll before restarting (pending telemetry preserved)"):
-					default:
+			// Drain a backlog left by a Core outage faster than one batch per
+			// second, while still yielding to new batches between ticks.
+			for range maxBatchesPerTick {
+				before := len(a.pending)
+				if err := a.deliverPending(); err != nil {
+					var httpErr *coreHTTPError
+					if errors.As(err, &httpErr) && (httpErr.status == 401 || httpErr.status == 403) {
+						select {
+						case result <- fmt.Errorf("agent credential rejected; re-enroll before restarting (pending telemetry preserved)"):
+						default:
+						}
+						return
 					}
-					return
+					a.config.Logger.Warn("telemetry delivery failed; batch retained", "error", err)
+					break
 				}
-				a.config.Logger.Warn("telemetry delivery failed; batch retained", "error", err)
+				if len(a.pending) == 0 || len(a.pending) >= before || a.ctx.Err() != nil {
+					break
+				}
 			}
 		case <-a.ctx.Done():
 			return
@@ -698,8 +793,6 @@ func (a *Agent) Start() error {
 	defer func() { a.cancel(); a.wg.Wait() }()
 	a.wg.Add(1)
 	go a.heartbeatLoop()
-	a.wg.Add(1)
-	go a.healthLoop()
 	if a.config.AccessLog != "" {
 		a.wg.Add(1)
 		go a.logsLoop()
@@ -727,6 +820,7 @@ func (a *Agent) Start() error {
 			return err
 		case <-ticker.C:
 			samples, statsErr := a.collectSamples()
+			samples = a.thinIdle(samples)
 			events := a.drainEvents()
 			if len(samples) == 0 && len(events) == 0 {
 				if statsErr != nil {
@@ -775,7 +869,7 @@ func (a *Agent) heartbeatLoop() {
 		a.mu.Unlock()
 		var m runtime.MemStats
 		runtime.ReadMemStats(&m)
-		h := wire.Heartbeat{NodeID: a.config.NodeID, Version: "0.2.0", Timestamp: time.Now(), MemoryMB: int(m.Alloc >> 20), UptimeSeconds: int64(time.Since(a.started).Seconds()), StatsError: statsError, LogsError: logsError, DroppedEvents: dropped, StatsIntervalMS: statsIntervalMS, StatsQueryMS: statsQueryMS, StatsUsers: statsUsers, StatsScope: statsScope, PendingBatches: pendingBatches}
+		h := wire.Heartbeat{NodeID: a.config.NodeID, Version: Version, Timestamp: time.Now(), MemoryMB: int(m.Alloc >> 20), UptimeSeconds: int64(time.Since(a.started).Seconds()), StatsError: statsError, LogsError: logsError, DroppedEvents: dropped, StatsIntervalMS: statsIntervalMS, StatsQueryMS: statsQueryMS, StatsUsers: statsUsers, StatsScope: statsScope, PendingBatches: pendingBatches}
 		if err := a.send("/api/v1/agents/heartbeat", h); err != nil {
 			a.config.Logger.Warn("heartbeat failed", "error", err)
 		} else if a.config.HealthFile != "" {

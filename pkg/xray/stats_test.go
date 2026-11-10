@@ -118,16 +118,9 @@ func TestRealGRPCStatsContractDeltaAndCounterReset(t *testing.T) {
 	if stats[0].UplinkDelta != 10 || stats[0].UplinkBps > 80 {
 		t.Fatalf("restart counter produced traffic spike: %+v", stats[0])
 	}
-	up, down, err := c.GetInboundStats(ctx, "reality")
-	if err != nil || up != 77 || down != 88 {
-		t.Fatalf("inbound contract: %d %d %v", up, down, err)
-	}
-	if err = c.Health(ctx); err != nil {
-		t.Fatal(err)
-	}
 	fixture.mu.Lock()
 	defer fixture.mu.Unlock()
-	if len(fixture.patterns) != 5 || fixture.patterns[3] != "inbound>>>reality>>>traffic>>>" {
+	if len(fixture.patterns) != 3 {
 		t.Fatalf("RPC query patterns: %v", fixture.patterns)
 	}
 }

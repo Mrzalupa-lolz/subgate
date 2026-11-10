@@ -263,7 +263,11 @@ func (s *Server) liveStream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
+	// http.Server.WriteTimeout (30 s) would otherwise cut the stream; extend
+	// the deadline per event so a stalled client is still dropped.
+	controller := http.NewResponseController(w)
 	send := func() bool {
+		_ = controller.SetWriteDeadline(time.Now().Add(15 * time.Second))
 		response, err := s.liveSnapshot(r)
 		if err != nil {
 			_, _ = fmt.Fprintf(w, "event: error\ndata: %s\n\n", strconv.Quote(err.Error()))

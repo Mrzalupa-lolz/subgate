@@ -20,7 +20,9 @@ func TestPanelVersionMismatch(t *testing.T) {
 		name, body, wantState, wantVersion string
 		status                             int
 	}{
-		{"approved", `{"response":{"version":"3.4.5"}}`, "compatible", "3.4.5", 200},
+		{"approved", `{"response":{"version":"3.4.8"}}`, "compatible", "3.4.8", 200},
+		{"same series patch", `{"response":{"version":"3.4.5"}}`, "compatible", "3.4.5", 200},
+		{"other major", `{"response":{"version":"4.4.8"}}`, "mismatch", "4.4.8", 200},
 		{"mismatch", `{"response":{"version":"3.5.0"}}`, "mismatch", "3.5.0", 200},
 		{"scope denied", `{"sensitive":"do-not-log"}`, "unavailable", "", 403},
 		{"missing", `{"response":{}}`, "unavailable", "", 200},
@@ -73,7 +75,7 @@ func TestPanelVersionMismatch(t *testing.T) {
 				t.Fatal(err)
 			}
 			got := result.PanelVersion
-			if got.Expected != "3.4.5" || got.Actual != tc.wantVersion || got.State != tc.wantState {
+			if got.Expected != panel.SupportedVersion || got.Actual != tc.wantVersion || got.State != tc.wantState {
 				t.Fatalf("version diagnostics: %+v", got)
 			}
 			if tc.wantState == "mismatch" && !strings.Contains(logs.String(), "panel version mismatch") {

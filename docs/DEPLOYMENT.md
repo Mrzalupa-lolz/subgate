@@ -17,6 +17,8 @@ cd subgate
 sudo bash deploy/install-core.sh
 ```
 
+Если репозиторий станет приватным, `git clone` потребует доступа (токен или SSH-ключ); для нод это не нужно — установщик агента отдаёт Core.
+
 Установщик спросит домен SubGate, URL Remnawave и API-токен панели. Пароль администратора создаётся автоматически. Настройки сохраняются в `deploy/.env` с правами 600. Core собирается в Docker, проверяет доступ к nodes/users панели, запускается и проверяет публичный HTTPS. Откройте показанный адрес. Учётные данные:
 
 ```bash
@@ -45,9 +47,11 @@ sudo bash deploy/install-core.sh --check
 
 ```bash
 installer=$(mktemp)
-curl -fsSL https://raw.githubusercontent.com/Mrzalupa-lolz/subgate/main/deploy/install-agent.sh -o "$installer"
+curl -fsSL https://subgate.example.com/install-agent.sh -o "$installer"
 sudo bash "$installer" --core-url https://subgate.example.com --node-id UUID-НОДЫ
 ```
+
+Установщик скачивается прямо с Core (`GET /install-agent.sh`, встроен в бинарник), а не с GitHub. Образ агента берётся из ghcr.io: пакет GHCR должен оставаться публичным, иначе на ноде нужен `docker login ghcr.io`.
 
 Установщик скачает образ, определит каталог лога и группу чтения, проверит доступ к core, StatsService, логу и volume. Только затем зарегистрирует агент и дождётся принятого core heartbeat. Настройки — `/opt/subgate-agent/.env`, постоянный токен и очередь — в Docker volume. Агент не открывает входящих HTTP-портов и не получает токен Remnawave.
 
@@ -115,7 +119,14 @@ SUBGATE_DOMAIN=subgate.example.com
 SUBGATE_ADMIN_USERNAME=admin
 SUBGATE_ADMIN_PASSWORD=replace-with-a-long-unique-password
 SUBGATE_TRUSTED_PROXIES=
+# Необязательно:
+SUBGATE_METRICS_TOKEN=
+SUBGATE_TELEGRAM_TOKEN=
+SUBGATE_TELEGRAM_CHAT_IDS=
+SUBGATE_TELEGRAM_TIMEZONE=
 ```
+
+`SUBGATE_METRICS_TOKEN` (YAML `http.metrics_token`) — bearer-токен для Prometheus: без него `/metrics` доступен только владельцу с сессией (`Authorization: Bearer ТОКЕН`). Telegram-уведомления настраиваются через `SUBGATE_TELEGRAM_TOKEN`, `SUBGATE_TELEGRAM_CHAT_IDS` (числовые id через запятую) и `SUBGATE_TELEGRAM_TIMEZONE`. Панель опрашивается раз в минуту; webhook панели не нужен и не принимается.
 
 Токен Remnawave хранится только в Core. Пароль владельца — не короче 12 символов; переменная применяется при создании первой учётной записи.
 
@@ -202,7 +213,7 @@ Certbot добавит HTTPS и перенаправление с HTTP. Пров
 
 ```bash
 installer=$(mktemp)
-curl -fsSL https://raw.githubusercontent.com/Mrzalupa-lolz/subgate/main/deploy/install-agent.sh -o "$installer"
+curl -fsSL https://subgate.example.com/install-agent.sh -o "$installer"
 sudo bash "$installer" \
   --core-url https://subgate.example.com \
   --node-id UUID-НОДЫ \

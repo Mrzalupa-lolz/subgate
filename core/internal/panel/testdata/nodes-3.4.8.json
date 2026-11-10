@@ -1,0 +1,104 @@
+{
+  "response": [
+    {
+      "uuid": "00000000-0000-4000-8000-000000000001",
+      "id": 25,
+      "name": "synthetic-node",
+      "address": "node.example.invalid",
+      "port": 2222,
+      "isConnected": true,
+      "isConnecting": false,
+      "isDisabled": false,
+      "lastStatusChange": "2026-11-09T00:12:11.308Z",
+      "trafficResetDay": 1,
+      "consumptionMultiplier": 1,
+      "nodeConsumptionMultiplier": 1,
+      "isTrafficTrackingActive": false,
+      "trafficLimitBytes": 0,
+      "trafficUsedBytes": 8000685830896,
+      "notifyPercent": 0,
+      "viewPosition": 0,
+      "countryCode": "NL",
+      "tags": ["synthetic"],
+      "integrationUuids": [],
+      "ips": [],
+      "createdAt": "2026-05-02T17:02:37.633Z",
+      "updatedAt": "2026-11-09T19:35:30.212Z",
+      "configProfile": {
+        "activeConfigProfileUuid": "00000000-0000-4000-8000-0000000000bb",
+        "activeInbounds": [
+          {
+            "uuid": "00000000-0000-4000-8000-000000000101",
+            "profileUuid": "00000000-0000-4000-8000-0000000000bb",
+            "tag": "REALITY-SYNTH",
+            "type": "vless",
+            "network": "raw",
+            "security": "reality",
+            "port": 443,
+            "rawInbound": {
+              "tag": "REALITY-SYNTH",
+              "port": 443,
+              "protocol": "vless",
+              "settings": {"clients": [], "decryption": "none"},
+              "streamSettings": {
+                "network": "raw",
+                "security": "reality",
+                "realitySettings": {"privateKey": "synthetic-private-key-must-not-be-retained", "serverNames": ["example.invalid"], "shortIds": ["00"]}
+              }
+            }
+          },
+          {
+            "uuid": "00000000-0000-4000-8000-000000000102",
+            "profileUuid": "00000000-0000-4000-8000-0000000000bb",
+            "tag": "HYSTERIA2-SYNTH",
+            "type": "hysteria",
+            "network": "hysteria",
+            "security": "tls",
+            "port": 443,
+            "rawInbound": {
+              "tag": "HYSTERIA2-SYNTH",
+              "port": 443,
+              "protocol": "hysteria",
+              "settings": {"clients": [], "version": 2},
+              "streamSettings": {"network": "hysteria", "security": "tls", "finalmask": {"udp": [{"type": "salamander", "settings": {"password": "synthetic"}}]}}
+            }
+          },
+          {
+            "uuid": "00000000-0000-4000-8000-000000000103",
+            "profileUuid": "00000000-0000-4000-8000-0000000000bb",
+            "tag": "BRIDGE-SYNTH",
+            "type": "shadowsocks",
+            "port": 9999,
+            "rawInbound": {"tag": "BRIDGE-SYNTH", "port": 9999, "protocol": "shadowsocks", "settings": {"clients": [], "network": "tcp,udp"}}
+          }
+        ]
+      },
+      "providerUuid": null,
+      "provider": null,
+      "xrayUptime": 69799,
+      "usersOnline": 19,
+      "system": {
+        "info": {"arch": "x64", "cpus": 3, "memoryTotal": 5153882112, "hostname": "remnanode", "platform": "linux", "networkInterfaces": ["lo", "eth0"]},
+        "stats": {"memoryFree": 2591633408, "memoryUsed": 2294759424, "uptime": 163438.29, "loadAvg": [1.05, 1.06, 0.96], "interface": {"interface": "eth0", "rxBytesPerSec": 10996469.5, "txBytesPerSec": 11126722.2, "rxTotal": 175366779027, "txTotal": 168690147481}}
+      },
+      "versions": {"xray": "26.10.31", "node": "3.4.4"}
+    },
+    {
+      "uuid": "00000000-0000-4000-8000-000000000002",
+      "id": 26,
+      "name": "synthetic-disabled",
+      "address": "192.0.2.20",
+      "port": null,
+      "isConnected": false,
+      "isConnecting": false,
+      "isDisabled": true,
+      "trafficUsedBytes": null,
+      "countryCode": "XX",
+      "tags": [],
+      "configProfile": {"activeConfigProfileUuid": null, "activeInbounds": []},
+      "usersOnline": null,
+      "system": null,
+      "versions": null
+    }
+  ]
+}

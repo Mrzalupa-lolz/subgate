@@ -21,9 +21,7 @@ func TestRemnawaveV3Contract(t *testing.T) {
 			if r.URL.Query().Get("start") != "100" || r.URL.Query().Get("size") != "50" {
 				t.Errorf("incorrect pagination: %s", r.URL.RawQuery)
 			}
-			io.WriteString(w, `{"response":{"total":101,"users":[{"uuid":"user-uuid","id":42,"shortUuid":"short123","username":"alice","email":"alice@example.com","status":"ACTIVE","trafficLimitBytes":9999,"expireAt":"2027-01-01T00:00:00Z","userTraffic":{"usedTrafficBytes":1234}}]}}`)
-		case "/api/users/by-short-uuid/short123", "/api/users/user-uuid":
-			io.WriteString(w, `{"response":{"uuid":"user-uuid","shortUuid":"short123","username":"alice","status":"DISABLED","userTraffic":{"usedTrafficBytes":25}}}`)
+			io.WriteString(w, `{"response":{"total":101,"users":[{"uuid":"00000000-0000-4000-8000-0000000000c1","id":42,"shortUuid":"short123","username":"alice","email":"alice@example.com","status":"ACTIVE","trafficLimitBytes":9999,"expireAt":"2027-01-01T00:00:00Z","userTraffic":{"usedTrafficBytes":1234}}]}}`)
 		case "/api/nodes":
 			io.WriteString(w, `{"response":[{"uuid":"node-uuid","name":"edge","address":"192.0.2.10","isConnected":true,"isDisabled":false,"countryCode":"FI","tags":["edge"],"usersOnline":7,"trafficUsedBytes":888,"configProfile":{"activeInbounds":[{"tag":"reality","type":"vless","port":443}]}},{"id":17,"name":"disabled","isConnected":true,"isDisabled":true}]}`)
 		case "/api/nodes/node-uuid/actions/restart":
@@ -47,14 +45,8 @@ func TestRemnawaveV3Contract(t *testing.T) {
 		t.Fatalf("pagination result: total=%d users=%v", total, users)
 	}
 	u := users[0]
-	if u.ID != "user-uuid" || u.ShortUUID != "short123" || u.Status != "active" || u.TrafficLimitBytes != 9999 || u.UsedTrafficBytes != 1234 {
+	if u.ID != "00000000-0000-4000-8000-0000000000c1" || u.ShortUUID != "short123" || u.Status != "active" || u.TrafficLimitBytes != 9999 || u.UsedTrafficBytes != 1234 {
 		t.Fatalf("camelCase user decode: %+v", u)
-	}
-	for _, fetch := range []func() (*User, error){func() (*User, error) { return c.GetUser("user-uuid") }, func() (*User, error) { return c.GetUserByShortUUID("short123") }} {
-		u, err := fetch()
-		if err != nil || u.Status != "disabled" || u.UsedTrafficBytes != 25 {
-			t.Fatalf("single user: %+v %v", u, err)
-		}
 	}
 	nodes, err := c.ListNodes()
 	if err != nil {

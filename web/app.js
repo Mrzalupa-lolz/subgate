@@ -278,8 +278,8 @@
       let data;
       const query = new URLSearchParams({ limit: '50', offset: String(f.offset || 0), q: f.q || '' });
       if (route === 'overview') {
-        const [status, nodes, agents, live, traffic, alerts, probes] = await Promise.all([get('/system/status'), get('/nodes?limit=1000'), get('/agents'), get('/live'), get('/traffic?minutes=60'), get('/alerts?limit=5'), get('/health/probes?limit=1000')]);
-        data = { status, nodes, agents, live, traffic, alerts, probes };
+        const [status, nodes, agents, live, traffic, alerts] = await Promise.all([get('/system/status'), get('/nodes?limit=1000'), get('/agents'), get('/live'), get('/traffic?minutes=60'), get('/alerts?limit=5')]);
+        data = { status, nodes, agents, live, traffic, alerts };
       } else if (route === 'live') {
         const [status, live, traffic] = await Promise.all([get('/system/status'), get('/live'), get(`/traffic?minutes=${f.minutes || 60}`)]);
         data = { status, live, traffic };
@@ -287,8 +287,7 @@
         const [list, nodes, status] = await Promise.all([get('/agents'), get('/nodes?limit=1000'), get('/system/status')]);
         data = { list, nodes, status };
       } else if (route === 'nodes') {
-        const [list, probes] = await Promise.all([get(`/nodes?${query}`), get('/health/probes?limit=1000')]);
-        data = { list, probes };
+        data = { list: await get(`/nodes?${query}`) };
       } else if (route === 'incidents') {
         data = { list: await get('/incidents?limit=200') };
       } else if (route === 'analysis') {
@@ -391,29 +390,21 @@
       `<span class="mono">${esc(node.ip_address || '—')}</span>`, badge(node.status),
       `<strong>${count(node.users_online)}</strong>`, bytes(node.traffic_used_bytes),
       (node.inbounds || []).map(inbound => `<span class="tag" title="${esc(`${inbound.tag || ''} · ${inbound.network || ''} · ${inbound.security || ''} · :${inbound.port || ''}`)}">${esc(inbound.type || inbound.tag || 'inbound')}</span>`).join('') || '—',
-      probeSummary(node.id),
       actions ? resourceActions('nodes', node) : `<a href="#/nodes" class="view-link">Открыть ${icon('arrow')}</a>`,
     ]);
-    return table(['Нода', 'Адрес', 'Состояние', 'Онлайн', 'Трафик', 'Протоколы', 'Проверка', 'Действия'], rows, { title: 'Ноды ещё не синхронизированы', detail: 'Укажите адрес Remnawave в конфигурации Core и запустите синхронизацию.', icon: 'nodes' });
-  }
-  function probeSummary(id) {
-    const probe = (state.data.probes?.data || []).find(item => item.node_id === id || item.id === id);
-    if (!probe) return '<span class="muted">Не проверено</span>';
-    const generic = probe.generic ? '<small>Неизвестный протокол · общая проверка</small>' : '';
-    if (probe.verified === 'unverified') return `<span class="badge neutral">Не проверено</span><small>Нужна проба протокола</small>${generic}`;
-    return `${badge(probe.success ? 'success' : 'failure')}<small>${esc(String(probe.verified || '').toUpperCase())} · ${count(probe.duration_ms)} мс · ${esc(date(probe.timestamp, true))}</small>${generic}`;
+    return table(['Нода', 'Адрес', 'Состояние', 'Онлайн', 'Трафик', 'Протоколы', 'Действия'], rows, { title: 'Ноды ещё не синхронизированы', detail: 'Укажите адрес Remnawave в конфигурации Core и запустите синхронизацию.', icon: 'nodes' });
   }
   function resourceActions(kind, item) {
     const common = `data-kind="${kind}" data-id="${esc(item.id)}"`;
     const disabled = String(item.status).toLowerCase() === 'disabled';
     const nodeActions = kind === 'nodes' && canWrite()
-      ? actionButton('resource-action', disabled ? 'Включить' : 'Отключить', `${common} data-operation="${disabled ? 'enable' : 'disable'}"`) + actionButton('probe-node', 'Проверить', common) + actionButton('resource-action', 'Рестарт', `${common} data-operation="restart"`) + actionButton('resource-action', 'Сброс трафика', `${common} data-operation="reset-traffic"`)
+      ? actionButton('resource-action', disabled ? 'Включить' : 'Отключить', `${common} data-operation="${disabled ? 'enable' : 'disable'}"`) + actionButton('resource-action', 'Рестарт', `${common} data-operation="restart"`) + actionButton('resource-action', 'Сброс трафика', `${common} data-operation="reset-traffic"`)
       : '';
     return `<div class="table-actions">${actionButton('details', 'Детали', common)}${nodeActions}${kind === 'users' && canWrite() ? `<a class="row-link" href="#/activity?user=${encodeURIComponent(item.id)}">Журнал</a>` : ''}</div>`;
   }
   function nodesPage() {
     const list = state.data.list || { data: [], total: 0 };
-    return pageHead(canWrite() ? '<button type="button" class="primary" data-action="sync">' + icon('refresh') + 'Синхронизировать</button>' : '') + toolbar('Поиск по имени, IP, стране или протоколу') + panel('Ноды Remnawave', nodeTable(list.data || []) + pageFoot(list.total || 0, (list.data || []).length), `<small>${count(list.total)} нод</small>`) + '<p class="help-line">Проверка измеряет установление TCP-соединения и TLS при наличии TLS. Она не подтверждает авторизацию VLESS/REALITY или работу транспортов. Для UDP и QUIC требуется отдельная проверка протокола.</p>';
+    return pageHead(canWrite() ? '<button type="button" class="primary" data-action="sync">' + icon('refresh') + 'Синхронизировать</button>' : '') + toolbar('Поиск по имени, IP, стране или протоколу') + panel('Ноды Remnawave', nodeTable(list.data || []) + pageFoot(list.total || 0, (list.data || []).length), `<small>${count(list.total)} нод</small>`) + '<p class="help-line">Состояние и число пользователей онлайн берутся из Remnawave при каждой синхронизации (раз в минуту).</p>';
   }
 
   function livePage() {
@@ -707,7 +698,7 @@
       const result = await request('/agents/enrollment-tokens', { method: 'POST', body: { node_id: String(form.get('node_id')) } });
       if (revision !== state.revision || dialogRevision !== state.dialogRevision) return;
       const quote = value => `'${String(value).replace(/'/g, "'\\''")}'`;
-      const installer = 'https://raw.githubusercontent.com/Mrzalupa-lolz/subgate/main/deploy/install-agent.sh';
+      const installer = `${location.origin}/install-agent.sh`;
       const command = `installer=$(mktemp) && curl -fsSL ${quote(installer)} -o "$installer" && sudo bash "$installer" --core-url ${quote(location.origin)} --node-id ${quote(result.node_id)} --enrollment-token ${quote(result.token)}`;
       const update = 'sudo bash /opt/subgate-agent/install-agent.sh --update';
       openDialog('Установка агента на ноду', `<p>Выполните команду на выбранной Linux-ноде с Docker и Compose v2. Она скачает образ, проверит core, StatsService и access.log, сохранит настройки и зарегистрирует агент. Готовность подтверждается принятым heartbeat. Токен действует до ${esc(date(result.expires_at))}.</p><pre class="code" id="enrollment-command">${esc(command)}</pre><button type="button" data-action="copy" data-target="enrollment-command">Скопировать установку</button><h3>Обновление установленного агента</h3><pre class="code" id="agent-command">${esc(update)}</pre><button type="button" data-action="copy" data-target="agent-command">Скопировать обновление</button><p class="help-line">Установщик сам определяет стандартный каталог access.log и его группу. Для другого расположения добавьте --log-dir /путь/к/каталогу; для нестандартного StatsService — --stats-addr адрес. Конфигурация хранится в /opt/subgate-agent, токен — в Docker volume. После сбоя с сохранёнными настройками: sudo bash /opt/subgate-agent/install-agent.sh --resume. Проверка без перезапуска: --check. Обновление скачивает свежий latest. Для фиксации версии добавьте --image ghcr.io/mrzalupa-lolz/subgate-agent:ВЕРСИЯ.</p>`, null);
@@ -772,19 +763,6 @@
       const revision = state.revision;
       const result = await request(`/${kind}/${encodeURIComponent(id)}`);
       if (revision === state.revision) openDialog(kind === 'nodes' ? 'Данные ноды' : 'Данные пользователя', `<pre class="code">${esc(JSON.stringify(result, null, 2))}</pre>`, null);
-      return;
-    }
-    if (action === 'probe-node') {
-      openDialog('Проверка ноды', `<p class="mono">${esc(id)}</p><div class="loading" role="status">Проверяем доступность настроенных endpoint…</div>`, null);
-      const revision = state.revision;
-      const dialogRevision = state.dialogRevision;
-      try {
-        const result = await request(`/nodes/${encodeURIComponent(id)}/probe`, { method: 'POST' });
-        if (revision !== state.revision || dialogRevision !== state.dialogRevision) return;
-        const rows = (result.data || []).map(probe => [esc(`${probe.protocol || '—'} / ${probe.transport || '—'}`) + (probe.generic ? '<small>Неизвестный протокол · общая проверка</small>' : ''), `:${esc(probe.port)}`, probe.verified === 'unverified' ? '<span class="badge neutral">Не проверено</span>' : badge(probe.success ? 'success' : 'failure'), esc(String(probe.verified || '').toUpperCase()), probe.verified === 'unverified' ? '—' : `${count(probe.duration_ms)} мс`, `<span class="wrap-cell">${esc(probe.error || '—')}</span>`]);
-        openDialog('Результат проверки ноды', `<p>Подтверждается доступность TCP или TLS endpoint. Авторизация прокси-протокола, REALITY и прикладные транспорты требуют отдельного клиента.</p>${table(['Протокол', 'Порт', 'Результат', 'Проверено', 'Время', 'Ошибка'], rows)}`, null);
-        await loadPage();
-      } catch (error) { if (dialogRevision === state.dialogRevision) closeDialog(); throw error; }
       return;
     }
     if (action === 'resource-action') {

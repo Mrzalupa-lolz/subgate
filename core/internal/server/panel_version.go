@@ -3,7 +3,7 @@ package server
 import (
 	"context"
 
-	"github.com/subgate/subgate/core/internal/panel/generated"
+	"github.com/subgate/subgate/core/internal/panel"
 )
 
 type panelVersionDiagnostic struct {
@@ -13,18 +13,18 @@ type panelVersionDiagnostic struct {
 }
 
 func initialPanelVersionDiagnostic() panelVersionDiagnostic {
-	return panelVersionDiagnostic{Expected: generated.SpecVersion, State: "not_checked"}
+	return panelVersionDiagnostic{Expected: panel.SupportedVersion, State: "not_checked"}
 }
 
 func (s *Server) checkPanelVersion(ctx context.Context) {
-	diagnostic := panelVersionDiagnostic{Expected: generated.SpecVersion, State: "unavailable"}
+	diagnostic := panelVersionDiagnostic{Expected: panel.SupportedVersion, State: "unavailable"}
 	actual, err := s.panel.Version(ctx)
 	if err == nil {
 		diagnostic.Actual = actual
 		diagnostic.State = "compatible"
-		if actual != generated.SpecVersion {
+		if !panel.VersionCompatible(actual) {
 			diagnostic.State = "mismatch"
-			s.logger.Warn("panel version mismatch", "expected", generated.SpecVersion, "actual", actual)
+			s.logger.Warn("panel version mismatch", "expected", panel.SupportedVersion, "actual", actual)
 		}
 	} else {
 		s.logger.Warn("panel version check unavailable")

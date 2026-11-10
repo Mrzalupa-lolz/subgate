@@ -13,10 +13,6 @@ import (
 	"net/url"
 	"strings"
 	"time"
-
-	"github.com/go-faster/jx"
-	"github.com/subgate/subgate/core/internal/panel/generated"
-	"github.com/subgate/subgate/pkg/wire"
 )
 
 type User struct {
@@ -29,38 +25,16 @@ type User struct {
 	UsedTrafficBytes  int64  `json:"used_traffic_bytes"`
 	ExpireAt          string `json:"expire_at"`
 }
+
+// Inbound is a display-only projection of configProfile.activeInbounds.
+// rawInbound (client settings, REALITY keys, certificates) is never decoded.
 type Inbound struct {
-	Tag      string           `json:"tag"`
-	Type     string           `json:"type"`
-	Network  string           `json:"network"`
-	Security string           `json:"security"`
-	Port     int              `json:"port"`
-	HTTP     *wire.HealthHTTP `json:"http,omitempty"`
+	Tag      string `json:"tag"`
+	Type     string `json:"type"`
+	Network  string `json:"network"`
+	Security string `json:"security"`
+	Port     int    `json:"port"`
 }
-type Host struct {
-	ID       string   `json:"uuid"`
-	Address  string   `json:"address"`
-	Port     int      `json:"port"`
-	Nodes    []string `json:"nodes"`
-	Disabled bool     `json:"isDisabled"`
-	Remark   string   `json:"remark"`
-}
-
-func (c *Client) ListHostsContext(ctx context.Context) ([]Host, error) {
-	raw, err := c.Request(ctx, "GET", "/api/hosts", nil)
-	if err != nil {
-		return nil, err
-	}
-	var hosts []Host
-	if err = json.Unmarshal(raw, &hosts); err != nil {
-		return nil, err
-	}
-	if hosts == nil {
-		return nil, fmt.Errorf("panel hosts response is missing array")
-	}
-	return hosts, nil
-}
-
 type Node struct {
 	ID               string    `json:"id"`
 	Name             string    `json:"name"`
@@ -161,7 +135,7 @@ func (c *Client) ListUsersContext(ctx context.Context, offset, limit int) ([]Use
 	}
 	users := make([]User, 0, len(result.Users))
 	for _, raw := range result.Users {
-		u, err := decodeGeneratedUser(raw)
+		u, err := decodeUser(raw)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -170,105 +144,63 @@ func (c *Client) ListUsersContext(ctx context.Context, offset, limit int) ([]Use
 	return users, result.Total, nil
 }
 
-func decodeGeneratedUser(raw []byte) (*User, error) {
-	var item generated.GetUsersResponseDtoResponseUsersItem
-	if err := item.Decode(jx.DecodeBytes(raw)); err != nil {
-		return nil, errors.New("invalid panel user response fields")
-	}
-	// Decode tolerates unknown enum strings; the strict writer validator must
-	// not reject future response statuses. Normalize from original bytes to
-	// retain exact int64 counters and stable legacy UUID identity precedence.
-	user, err := decodeUser(raw)
-	if err != nil {
-		return nil, errors.New("invalid panel user identity or traffic")
-	}
-	return user, nil
-}
 func (c *Client) ListUsers(offset, limit int) ([]User, int, error) {
 	return c.ListUsersContext(context.Background(), offset, limit)
 }
+
+// decodeUser reads the Remnawave 3.4 user projection. Only the fields SubGate
+// relies on are decoded and validated; credentials, squads and unknown fields
+// are ignored. Remnawave 3.x identifies users by numeric id; a legacy uuid is
+// still preferred when present so existing identities stay stable.
 func decodeUser(raw []byte) (*User, error) {
 	var w struct {
 		ID        json.RawMessage `json:"id"`
-		UUID      string          `json:"uuid"`
-		ShortUUID string          `json:"shortUuid"`
-		Username  string          `json:"username"`
-		Email     string          `json:"email"`
-		Status    string          `json:"status"`
-		Limit     int64           `json:"trafficLimitBytes"`
-		ExpireAt  string          `json:"expireAt"`
-		Traffic   struct {
-			Used int64 `json:"usedTrafficBytes"`
+		UUID      *string         `json:"uuid"`
+		ShortUUID *string         `json:"shortUuid"`
+		Username  *string         `json:"username"`
+		Email     *string         `json:"email"`
+		Status    *string         `json:"status"`
+		Limit     *int64          `json:"trafficLimitBytes"`
+		ExpireAt  *string         `json:"expireAt"`
+		Traffic   *struct {
+			Used *int64 `json:"usedTrafficBytes"`
 		} `json:"userTraffic"`
 	}
 	if err := json.Unmarshal(raw, &w); err != nil {
-		return nil, err
+		return nil, errors.New("invalid panel user fields")
+	}
+	if w.ShortUUID == nil || w.Username == nil || w.Status == nil || w.Limit == nil || w.ExpireAt == nil || w.Traffic == nil || w.Traffic.Used == nil {
+		return nil, errors.New("panel user is missing required fields")
+	}
+	if *w.Limit < 0 || *w.Traffic.Used < 0 {
+		return nil, errors.New("panel user traffic counters must not be negative")
+	}
+	if _, err := time.Parse(time.RFC3339Nano, *w.ExpireAt); err != nil {
+		return nil, errors.New("invalid panel user expiry")
+	}
+	id := ""
+	if w.UUID != nil {
+		id = strings.TrimSpace(*w.UUID)
 	}
 	if len(w.ID) > 0 && string(w.ID) != "null" {
 		var numericID json.Number
-		if err := json.Unmarshal(w.ID, &numericID); err != nil {
-			return nil, errors.New("panel user id must be numeric")
+		if err := json.Unmarshal(w.ID, &numericID); err != nil || strings.ContainsAny(numericID.String(), ".eE-") {
+			return nil, errors.New("panel user id must be a positive integer")
+		}
+		if id == "" {
+			id = numericID.String()
 		}
 	}
-	id := w.UUID
-	if id == "" {
-		id = strings.Trim(string(w.ID), "\"")
-	}
-	if id == "" || id == "null" || w.ShortUUID == "" {
+	if id == "" || *w.ShortUUID == "" || *w.Username == "" || *w.Status == "" {
 		return nil, fmt.Errorf("panel user is missing identity")
 	}
-	return &User{ID: id, ShortUUID: w.ShortUUID, Username: w.Username, Email: w.Email, Status: strings.ToLower(w.Status), TrafficLimitBytes: w.Limit, UsedTrafficBytes: w.Traffic.Used, ExpireAt: w.ExpireAt}, nil
+	email := ""
+	if w.Email != nil {
+		email = *w.Email
+	}
+	return &User{ID: id, ShortUUID: *w.ShortUUID, Username: *w.Username, Email: email, Status: strings.ToLower(*w.Status), TrafficLimitBytes: *w.Limit, UsedTrafficBytes: *w.Traffic.Used, ExpireAt: *w.ExpireAt}, nil
 }
 
-// DecodeWebhookUser uses the native Remnawave 3.4.5 ExtendedUsersSchema
-// projection, shared with REST reads. Unknown response fields/statuses survive
-// as tolerant-reader input; malformed identities or counters are rejected.
-// Source: remnawave/backend@3.4.5 libs/contract/models/webhook/webhook.schema.ts.
-func DecodeWebhookUser(raw []byte) (*User, error) {
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &fields); err != nil {
-		return nil, err
-	}
-	for _, name := range []string{"shortUuid", "username", "status", "trafficLimitBytes", "expireAt", "userTraffic", "email"} {
-		value, exists := fields[name]
-		if !exists || (string(value) == "null" && name != "email") {
-			return nil, errors.New("missing webhook user projection fields")
-		}
-	}
-	var traffic map[string]json.RawMessage
-	if err := json.Unmarshal(fields["userTraffic"], &traffic); err != nil {
-		return nil, err
-	}
-	if value, exists := traffic["usedTrafficBytes"]; !exists || string(value) == "null" {
-		return nil, errors.New("missing webhook traffic counter")
-	}
-	user, err := decodeUser(raw)
-	if err != nil {
-		return nil, err
-	}
-	if strings.TrimSpace(user.ID) == "" || strings.TrimSpace(user.ShortUUID) == "" || strings.TrimSpace(user.Status) == "" || user.Username == "" || user.TrafficLimitBytes < 0 || user.UsedTrafficBytes < 0 {
-		return nil, errors.New("invalid webhook user fields")
-	}
-	if _, err := time.Parse(time.RFC3339Nano, user.ExpireAt); err != nil {
-		return nil, errors.New("invalid webhook expiry")
-	}
-	return user, nil
-}
-
-func (c *Client) GetUser(id string) (*User, error) {
-	b, e := c.Request(context.Background(), "GET", "/api/users/"+url.PathEscape(id), nil)
-	if e != nil {
-		return nil, e
-	}
-	return decodeUser(b)
-}
-func (c *Client) GetUserByShortUUID(id string) (*User, error) {
-	b, e := c.Request(context.Background(), "GET", "/api/users/by-short-uuid/"+url.PathEscape(id), nil)
-	if e != nil {
-		return nil, e
-	}
-	return decodeUser(b)
-}
 func (c *Client) ListNodesContext(ctx context.Context) ([]Node, error) {
 	b, err := c.Request(ctx, "GET", "/api/nodes", nil)
 	if err != nil {

@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/subgate/subgate/core/internal/panel"
 )
@@ -84,10 +83,6 @@ func TestEnrollmentAndSyncAuditFailures(t *testing.T) {
 		s.config.Demo = false
 		s.panel.Close()
 		s.panel = panel.NewClient(upstream.URL, "test", s.logger)
-		entry := legacySnapshot{Data: []byte("last-good"), StoredAt: time.Now(), ExpiresAt: time.Now().Add(time.Minute)}
-		if err := s.Save("audit-snapshot", entry); err != nil {
-			t.Fatal(err)
-		}
 		if _, err := s.db.Exec("CREATE TRIGGER audit_fixture BEFORE INSERT ON audit_log WHEN NEW.status='success' BEGIN SELECT RAISE(ABORT,'fixture'); END"); err != nil {
 			t.Fatal(err)
 		}
@@ -98,9 +93,6 @@ func TestEnrollmentAndSyncAuditFailures(t *testing.T) {
 		after, err := s.objects("users")
 		if err != nil || len(after) != len(before) {
 			t.Errorf("audit failure changed snapshot: %d -> %d %v", len(before), len(after), err)
-		}
-		if _, err := s.Load("audit-snapshot"); err != nil {
-			t.Error("audit failure cleared last-good cache", err)
 		}
 		var count int
 		if err := s.db.QueryRow("SELECT COUNT(*) FROM audit_log WHERE action='panel.sync' AND status='failure'").Scan(&count); err != nil || count != 1 {

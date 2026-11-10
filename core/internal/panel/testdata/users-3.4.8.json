@@ -1,0 +1,47 @@
+{
+  "response": {
+    "users": [
+      {
+        "id": 42,
+        "shortUuid": "SyntheticShort42",
+        "username": "synthetic-user",
+        "status": "ACTIVE",
+        "trafficLimitBytes": 4096,
+        "trafficLimitStrategy": "NO_RESET",
+        "expireAt": "2099-11-09T19:00:54.000Z",
+        "telegramId": null,
+        "email": null,
+        "description": "synthetic fixture shaped like Remnawave 3.4.8 GET /api/users",
+        "tag": "SERVICE",
+        "hwidDeviceLimit": null,
+        "externalSquadUuid": null,
+        "trojanPassword": "synthetic-trojan-password",
+        "vlessUuid": "00000000-0000-4000-8000-000000000042",
+        "ssPassword": "synthetic-ss-password",
+        "lastTriggeredThreshold": 0,
+        "subRevokedAt": null,
+        "lastTrafficResetAt": null,
+        "createdAt": "2026-11-09T18:50:20.631Z",
+        "updatedAt": "2026-11-09T19:00:59.250Z",
+        "subscriptionUrl": "https://sub.example.invalid/SyntheticShort42",
+        "activeInternalSquads": [
+          {
+            "uuid": "00000000-0000-4000-8000-0000000000aa",
+            "name": "Default-Squad"
+          }
+        ],
+        "userTraffic": {
+          "usedTrafficBytes": 512,
+          "lifetimeUsedTrafficBytes": 512,
+          "onlineAt": "2026-11-09T19:27:00.261Z",
+          "lastConnectedNodeUuid": "00000000-0000-4000-8000-000000000001",
+          "firstConnectedAt": "2026-11-09T18:55:45.041Z"
+        },
+        "futureField": {
+          "opaque": true
+        }
+      }
+    ],
+    "total": 1
+  }
+}

@@ -27,5 +27,4 @@ deploy/.env
 deploy/core.env
 deploy/agent.env
 deploy/.proxy-mode
-_archive
 remnawave-subscription-middleware

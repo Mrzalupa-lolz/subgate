@@ -72,9 +72,6 @@ func TestActivityKeyRotation(t *testing.T) {
 	if _, err := s.db.Exec("INSERT INTO sg_activity(node_id,user_id,timestamp,payload) VALUES(?,?,?,?)", "demo-node-1", "1", event.Timestamp.UnixMilli(), payload); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Save("rotate-cache", legacySnapshot{Data: []byte("synthetic subscription"), StoredAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}); err != nil {
-		t.Fatal(err)
-	}
 	if w := perform(s, "GET", "/api/v1/activity?domain=legacy", nil, session, "", false); w.Code != 200 {
 		t.Fatal(w.Code)
 	}
@@ -94,9 +91,6 @@ func TestActivityKeyRotation(t *testing.T) {
 	session = loginTest(t, s)
 	if w := perform(s, "GET", "/api/v1/activity?domain=legacy", nil, session, "", false); w.Code != 200 || !bytes.Contains(w.Body.Bytes(), []byte("legacy.example.invalid")) {
 		t.Fatalf("old activity unavailable: %d", w.Code)
-	}
-	if entry, err := s.Load("rotate-cache"); err != nil || string(entry.Data) != "synthetic subscription" {
-		t.Fatal("old cache unavailable", err)
 	}
 	if w := perform(s, "GET", "/api/v1/audit", nil, session, "", false); w.Code != 200 || !bytes.Contains(w.Body.Bytes(), []byte("legacy")) {
 		t.Fatal("old audit unavailable", w.Code)
@@ -142,15 +136,6 @@ func TestActivityKeyRotation(t *testing.T) {
 	}
 	if raw, err := only.decrypt(persisted, "demo-node-1:1"); err != nil || !bytes.Contains(raw, []byte("rotated.example.invalid")) {
 		t.Fatal("new activity not current-key encrypted", err)
-	}
-	if err := s.Save("new-cache", legacySnapshot{Data: []byte("new cache")}); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.db.QueryRow("SELECT payload FROM sg_snapshots WHERE key='new-cache'").Scan(&persisted); err != nil {
-		t.Fatal(err)
-	}
-	if raw, err := only.decrypt(persisted, "new-cache"); err != nil || !bytes.Contains(raw, []byte("bmV3IGNhY2hl")) {
-		t.Fatal("new cache not current-key encrypted", err)
 	}
 	var details, action string
 	var ownerID int

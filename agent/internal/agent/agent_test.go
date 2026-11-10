@@ -364,3 +364,79 @@ func TestRevokedCredentialPreservesPendingForReenrollment(t *testing.T) {
 		t.Fatalf("401 removed durable pending: %v", err)
 	}
 }
+
+// Regression: the retention clock of a drained queue must not expire batches
+// produced more than 24h after the agent started.
+func TestDrainedQueueRestartsRetentionClock(t *testing.T) {
+	var received atomic.Int32
+	u := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		received.Add(1)
+		io.WriteString(w, `{"ok":true}`)
+	}))
+	defer u.Close()
+	a := testAgent(t, u.URL, filepath.Join(t.TempDir(), "spool"), "agent-secret-token")
+	// State left behind by a queue that was drained a day ago.
+	a.pendingCreated = time.Now().Add(-25 * time.Hour)
+	a.appendPending(testBatch("after-a-day"), time.Now())
+	if err := a.deliverPending(); err != nil {
+		t.Fatal(err)
+	}
+	if received.Load() != 1 || len(a.pending) != 0 || a.expired != 0 {
+		t.Fatalf("fresh batch was not delivered: received=%d pending=%d expired=%d", received.Load(), len(a.pending), a.expired)
+	}
+	if !a.pendingCreated.IsZero() {
+		t.Fatal("drained queue kept its retention clock")
+	}
+	first, second := testBatch("oldest"), testBatch("newest")
+	a.appendPending(first, time.Now().Add(-time.Minute))
+	a.appendPending(second, time.Now())
+	if err := a.deliverPending(); err != nil {
+		t.Fatal(err)
+	}
+	if len(a.pending) != 1 || !a.pendingCreated.Equal(a.pending[0].SentAt) {
+		t.Fatalf("retention clock does not follow the oldest batch: %v %v", a.pendingCreated, a.pending)
+	}
+}
+
+func TestThinIdleKeepsContiguousCoverage(t *testing.T) {
+	a := &Agent{}
+	start := time.Unix(1_800_000_000, 0).UTC()
+	sample := func(sec int, bps int64) wire.Sample {
+		delta := bps / 8
+		return wire.Sample{UserID: "u", Scope: "user", Timestamp: start.Add(time.Duration(sec) * time.Second), IntervalMS: 1000, UplinkBps: bps, UplinkDelta: delta}
+	}
+	var sent []wire.Sample
+	for sec := 0; sec < 40; sec++ {
+		bps := int64(0)
+		if sec < 3 || sec == 30 {
+			bps = 8000
+		}
+		sent = append(sent, a.thinIdle([]wire.Sample{sample(sec, bps)})...)
+	}
+	if len(sent) >= 40 || len(sent) < 10 {
+		t.Fatalf("idle samples not thinned: %d sent", len(sent))
+	}
+	for i := 1; i < len(sent); i++ {
+		gap := sent[i].Timestamp.Sub(sent[i-1].Timestamp).Milliseconds()
+		if sent[i].IntervalMS != gap {
+			t.Fatalf("sample %d interval %d does not cover gap %d: %+v", i, sent[i].IntervalMS, gap, sent[i])
+		}
+		if sent[i].IntervalMS < 1000 || sent[i].IntervalMS > 15000 {
+			t.Fatalf("interval outside analysis bounds: %+v", sent[i])
+		}
+	}
+	active := 0
+	for _, s := range sent {
+		if s.UplinkBps > 0 {
+			active++
+		}
+	}
+	if active != 4 {
+		t.Fatalf("active samples lost: %d", active)
+	}
+	// A vanished series (Xray restart) is forgotten.
+	a.thinIdle(nil)
+	if len(a.series) != 0 {
+		t.Fatal("series state leaked")
+	}
+}
